@@ -18,6 +18,7 @@ jobs:
       - run: node --check app/static/diagnostics.js
       - run: node --check app/static/analysis-ui.js
       - run: node --check app/static/topology.js
+      - run: node --check app/static/conversations.js
       - run: docker compose up --build -d
       - run: python scripts/smoke_test.py --demo
       - run: docker compose restart analyzer

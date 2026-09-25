@@ -1,6 +1,6 @@
 # Architecture and parser contract
 
-## Data model (schema version 4)
+## Data model (schema version 5)
 
 | Table | Meaning | Relations |
 |---|---|---|
@@ -62,3 +62,31 @@ Version 2 → 3 backs up before adding saved_analyses (validated configuration J
 ## Observation roles (schema 4)
 
 `observation_roles` attaches session, participant, role (app/xcoder/unknown), node, analyst note and optimistic revision to a perspective. The composite session/participant value groups observation points; it never changes SIP identity or metric attribution. An import may contain multiple perspectives belonging to different participants. Unannotated observations keep their previous labels. The multicomponent chart requests each perspective independently, applies its source clock offset and preserves device/flow/SSRC and event provenance. See [xcoder workflow and limits](xcoder.md).
+
+
+## Schema 5: platform metadata and conversation discovery
+
+The v4→v5 migration creates a consistent SQLite backup (`kpe.sqlite3.pre-v5.bak`)
+before changing a populated database. An existing backup is never overwritten.
+Keep it locally; to retry a failed migration preserve/rename the backup first.
+The migration does not change calls, perspectives, raw outcomes, metrics or analyst
+annotations. Existing imports are backfilled once using `conversation-discovery-1:<id>`.
+
+- `source_profiles`: whitelisted export metadata, platform, file-presence flags,
+  and source event/line evidence. Android `info.log` version applies to the export,
+  not automatically to every historical call in it.
+- `call_correlations`: validated non-nil X-Call-UUID from actual SIP INVITE request
+  headers, with exact event and header line. Bodies and responses are excluded.
+- `leg_outcomes`: explicit CANCEL Reason cause=200 / Call completed elsewhere,
+  preserving the original lifecycle status separately.
+
+`GET /api/conversation-groups` derives stable-key groups without merging Call-IDs:
+shared UUID, repeated exact SIP Call-ID, manual conversations, and explicit
+App/xcoder sessions. A shared UUID describes a signaling attempt and may include
+forked or unanswered legs. Several UUIDs for one Call-ID or reuse over more than
+24 hours marks a candidate as requiring review. This guard is not a guarantee
+against vendor identifier reuse. No matching by telephone number or time proximity.
+Repeated exports may yield multiple perspectives of one physical device. The UI
+selects the richest perspective per Call-ID initially, with explicit selection of
+additional observations. This is a convenience, not participant identification.
+See [the user guide](conversations.md) for Android coverage and interpretation.

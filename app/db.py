@@ -64,7 +64,7 @@ def connect(db_path=None):
 def init(db):
     db.executescript(SCHEMA)
     version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-    if version not in ('1', '2', '3', '4'):
+    if version not in ('1', '2', '3', '4', '5'):
         raise RuntimeError('Unsupported database schema; back up the database before upgrading')
     if version == '1':
         filename = db.execute('PRAGMA database_list').fetchone()[2]
@@ -122,6 +122,28 @@ def init(db):
                 node TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '',
                 revision INTEGER NOT NULL DEFAULT 1, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
             db.execute("UPDATE meta SET value='4' WHERE key='schema_version'")
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '4':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT COUNT(*) FROM imports').fetchone()[0]:
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v5.bak')
+            if backup.exists():
+                raise RuntimeError(f'Backup already exists: {backup}; preserve or rename before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('CREATE TABLE source_profiles(import_id INTEGER PRIMARY KEY REFERENCES imports(id),profile TEXT NOT NULL)')
+            db.execute('''CREATE TABLE call_correlations(event_id INTEGER NOT NULL REFERENCES events(id),
+                call_id INTEGER NOT NULL REFERENCES calls(id),uuid TEXT NOT NULL,source_line INTEGER NOT NULL,
+                PRIMARY KEY(event_id,uuid))''')
+            db.execute('CREATE INDEX correlation_uuid ON call_correlations(uuid,call_id)')
+            db.execute('''CREATE TABLE leg_outcomes(event_id INTEGER PRIMARY KEY REFERENCES events(id),
+                perspective_id INTEGER NOT NULL REFERENCES perspectives(id),outcome TEXT NOT NULL)''')
+            db.execute("UPDATE meta SET value='5' WHERE key='schema_version'")
     from .enrichment import enrich_pending
     enrich_pending(db)
 

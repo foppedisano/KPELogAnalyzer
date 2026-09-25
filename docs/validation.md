@@ -75,3 +75,29 @@ Final Docker verification: container healthy on 127.0.0.1:8080, parser 1.2.0. An
 - Backfill was exercised twice on a database copy before deployment: 1347 new events (1–470 packets), 44 unassigned; all pre-existing metrics preserved. Live Docker re-initialization also creates no duplicates. A pre-missing-packets backup is retained in the data volume.
 - Docker 1.6.0 deployed. Browser call chart verified 84 isolated event points, range 1–4 packets, with source file/line tooltips and no console errors. Diagnostic API also returns 84 event points with unit packets.
 - Counts describe sequence-gap notifications, not unique or final packet loss. xcoder format coverage remains unverified as documented in XCODER-001.
+
+## Upstream/downstream selection — 2026-09-25
+
+- 56 tests pass; syntax checks cover all browser scripts. Context tests verify local versus peer reception, bidirectional RTT, unconfirmed KPE semantics, xcoder non-inversion, option groups and HTTP/CSV direction filtering.
+- Live browser checks: separate upstream/downstream jitter options, upstream-only legends and CSV URL, diagnostic upstream filter with only peer-report values in the shared tooltip. Local audio episodes remain explicitly labelled as unfiltered context.
+- Docker 1.7.0 deployed without schema migration or reimport. Original direction and numeric values remain unchanged; context metadata is response-only. Unlabelled sources are explicitly app-assumed; role xcoder alone never proves an app-facing RTP leg.
+
+
+## Android and conversation discovery — 2026-09-25
+
+- 62 Python tests pass, plus syntax checks for all five browser scripts. New
+  synthetic regressions cover Android metadata scope, shared metric extractors,
+  different Call-IDs with a shared UUID, invalid/body UUID rejection, explicit
+  answered-elsewhere reason, reused/conflicting identifiers, manual sessions and
+  v4→v5 backup/preservation.
+- An isolated Docker instance imports synthetic iOS/Android ZIPs through HTTP,
+  verifies correlation, deduplication and derived metrics, then repeats after
+  restart to verify persistence. No synthetic imports enter the production DB.
+- The current database was migrated on a consistent copy before deployment. All
+  6 imports, 318 calls, 826 perspectives, 1772730 events and 221290 metrics were
+  preserved. Five multiple-Call-ID groups were found, four across iOS/Android.
+- Docker 1.8.0 deployed locally with automatic pre-v5 backup. Browser checks
+  cover discovery cards, Android export metadata, per-observation selection,
+  the shared temporal chart, direction filter and evidence tooltip. No console
+  errors observed in these flows. Wrapper-only Android events remain raw; KPE
+  metric coverage is not fabricated when CallInfo is absent.

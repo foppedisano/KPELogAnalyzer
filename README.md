@@ -12,6 +12,10 @@ docker compose up --build -d
 
 Apri http://127.0.0.1:8080/. Repository pubblico **senza licenza concessa per ora**: non è concessa una licenza generale di riuso, modifica o redistribuzione.
 
+## Android e conversazioni
+
+Gli ZIP iOS e Android osservati usano lo stesso flusso di importazione. La vista **Conversazioni** collega le tratte tramite X-Call-UUID quando presente, mantiene visibili esiti e prove, e permette il confronto di app e gateway. [Guida, criteri e limiti](docs/conversations.md).
+
 ## Avvio con Docker
 
 Prerequisiti: Docker Engine con Compose, oppure Docker Desktop **avviato** in modalità container Linux.

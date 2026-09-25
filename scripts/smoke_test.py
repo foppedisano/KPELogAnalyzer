@@ -36,7 +36,14 @@ def main():
     from tests.test_enrichment import vd
     from tests.test_missing_packets import message
     for index,direction in enumerate(('OUTGOING','INCOMING')):
-        files=sample(cid='kpeloganalyzer-smoke@example.test',direction=direction)
+        files=sample(cid=f'kpeloganalyzer-smoke-{index}@example.test',direction=direction)
+        files['sip_debug.txt']=files['sip_debug.txt'].replace('Content-Length: 0', 'X-Call-UUID: 12345678-1234-4234-8234-123456789abc\nContent-Length: 0',1)
+        if index:
+            files.pop('CallInfo.log')
+            files['kpe-android_0.log']='Synthetic wrapper'
+            files['info.log']='DEVICE MODEL: Synthetic\nOS VERSION: 16\nAPP VERSION: 1.0\n'
+        else:
+            files['ios_hwwrapper.log']='Synthetic wrapper'
         files['VDlog.txt']=vd(5,100,10)+vd(10,100,30)+message(second=12)
         content=io.BytesIO()
         with zipfile.ZipFile(content,'w',zipfile.ZIP_DEFLATED) as z:
@@ -53,7 +60,10 @@ def main():
         assert any(p['value']==20 for p in delta)
         missing=request(f'metrics?calls={cid}&name=vd.missing_packets')
         assert any(p['value']==4 for p in missing)
-    print('Synthetic ZIP import, deduplication, delta and missing packets OK')
+    group=next(g for g in request('conversation-groups') if g['key']=='uuid:12345678-1234-4234-8234-123456789abc')
+    assert len(group['call_ids'])==2 and not group['review']
+    assert {p['profile']['platform'] for p in group['perspectives']}=={'ios','android'}
+    print('Synthetic iOS/Android ZIP import, deduplication, metrics and UUID conversation OK')
 
 
 if __name__=='__main__':

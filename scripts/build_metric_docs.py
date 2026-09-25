@@ -10,7 +10,7 @@ Questa guida è generata da `app/catalog.py`, la stessa fonte usata da **Guida a
 ## Regole comuni
 
 - **Prospettiva**: osservazione di una chiamata in una sorgente importata. Non identifica permanentemente un telefono: due export dello stesso dispositivo possono duplicarsi.
-- **Incoming / outgoing**: rispetto all’app che produce il log. Nei Receiver Report outgoing è una misura riferita dal peer sulla ricezione del flusso inviato dall’app.
+- **Downstream / upstream**: rispetto all’app. Incoming RTCP e VD descrivono la ricezione locale (downstream); jitter/loss dei Receiver Report outgoing descrivono la ricezione del peer/GW (upstream). RTT e ping sono bidirezionali. Per xcoder o tratta ignota si mantengono ricezione locale/del peer, senza inversione automatica. Sorgenti senza ruolo dichiarato: app presunta, non identità verificata.
 - **Flow / SSRC / device**: restano distinti; non aggregare flussi o destinatari diversi. Il device selezionato nella diagnostica filtra le metriche VD; RTT mostra separatamente tutti i flow/SSRC attribuiti alla prospettiva.
 - **sample / gauge**: osservazione al timestamp. **event**: aggiornamento esplicito, senza interpolazione. **counter**: contatore cumulativo soggetto a reset. **interval**: differenza sull’intervallo indicato.
 - **last / avg / min / max**: statistiche riportate da KPE, non calcolate dall’analizzatore. Non è nota automaticamente la loro finestra temporale. La media nelle tabelle RTCP è aritmetica sui campioni, non pesata per durata o pacchetti.

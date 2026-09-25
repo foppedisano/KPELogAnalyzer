@@ -16,8 +16,11 @@ def annotation(db, pid):
 
 
 def decorate(db, perspectives):
+    from .conversation_discovery import profiles
+    source = profiles(db)
     roles = {r['perspective_id']: r for r in rows(db, 'SELECT * FROM observation_roles')}
     for p in perspectives:
+        p['source_profile'] = source.get(p['import_id'], {})
         r = roles.get(p['id'])
         p['observation'] = r
         if r:

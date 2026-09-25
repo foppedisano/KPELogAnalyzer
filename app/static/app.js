@@ -188,7 +188,7 @@ async function detail(id) {
       "Segnalazione, statistiche e contesto della sessione.",
       `<button id="select-detail">${state.selected.has(id) ? "Rimuovi dal confronto" : "Aggiungi al confronto"}</button>`,
     ) +
-    `<div class="detail-meta"><div><span>PRIMA EVIDENZA</span><strong>${stamp(c.start)}</strong></div><div><span>CONNESSIONE</span><strong>${stamp(c.connected)}</strong></div><div><span>ULTIMA TERMINAZIONE</span><strong>${stamp(c.end)}</strong></div><div><span>DURATA CONNESSA*</span><strong>${duration(c)}</strong></div></div><p class="mono muted">Call-ID: ${esc(c.sip_call_id || "Non disponibile · sessione locale")}</p><p class="muted">* Intervallo osservato; con più sorgenti non corregge eventuali differenze tra gli orologi.</p><div class="panel"><div class="panel-head"><h2>Punti di vista</h2><span class="tag neutral">${ps.length} sorgenti</span></div>${ps.map((p) => `<div class="perspective"><strong>${esc(p.label)} <span class="tag neutral">${esc(p.direction)}</span> <span class="tag">${esc(p.status)}</span></strong><small>App ${esc(p.app_version || "versione non documentata")} ${p.version_event_id ? "(evento " + p.version_event_id + ")" : ""} · Linea ${p.line_id ?? "non nota"} · ${esc(p.evidence)} · offset grafico ${p.clock_offset}s</small><small>${stamp(p.start)} → ${stamp(p.end)}</small></div>`).join("")}</div><div id="analysis-panel"></div><div id="chart-panel"></div><div id="detail-events"></div>`;
+    `<div class="detail-meta"><div><span>PRIMA EVIDENZA</span><strong>${stamp(c.start)}</strong></div><div><span>CONNESSIONE</span><strong>${stamp(c.connected)}</strong></div><div><span>ULTIMA TERMINAZIONE</span><strong>${stamp(c.end)}</strong></div><div><span>DURATA CONNESSA*</span><strong>${duration(c)}</strong></div></div><p class="mono muted">Call-ID: ${esc(c.sip_call_id || "Non disponibile · sessione locale")}</p><p class="muted">* Intervallo osservato; con più sorgenti non corregge eventuali differenze tra gli orologi.</p><div class="panel"><div class="panel-head"><h2>Punti di vista</h2><span class="tag neutral">${ps.length} sorgenti</span></div>${ps.map((p) => `<div class="perspective"><strong>${esc(p.label)} <span class="tag neutral">${esc(p.direction)}</span> <span class="tag">${esc(p.status)}</span></strong><small>${esc(sourceDescription(p))}</small><small>App ${esc(p.app_version || "versione non documentata")} ${p.version_event_id ? "(evento " + p.version_event_id + ")" : ""} · Linea ${p.line_id ?? "non nota"} · ${esc(p.evidence)} · offset grafico ${p.clock_offset}s</small><small>${stamp(p.start)} → ${stamp(p.end)}</small></div>`).join("")}</div><div id="analysis-panel"></div><div id="chart-panel"></div><div id="detail-events"></div>`;
   $("#back-calls").onclick = safe(() => setView("calls"));
   $("#select-detail").onclick = () => {
     state.selected.has(id) ? state.selected.delete(id) : state.selected.add(id);
@@ -238,11 +238,12 @@ const colors = [
 async function mountChart(root, ids) {
   if (!root) return;
   root.innerHTML = `<div class="panel"><div class="panel-head"><h2>Andamento delle metriche</h2><a id="csv-link" class="small-button">↓ CSV</a></div><div class="panel-body"><div class="chart-controls"><label>Parametro<select id="metric-name"></select></label><label>Statistica<select id="metric-stat"></select></label><label>Allineamento<select id="chart-axis"><option value="relative">Tempo dalla prima evidenza</option><option value="absolute">Orario log + correzione</option></select></label><label class="check"><input type="checkbox" id="include-invalid"> Mostra anomali</label></div><p class="muted" id="unit-note"></p><div class="chart-area"><canvas id="chart" aria-label="Grafico temporale delle metriche" role="img"></canvas><div class="chart-tooltip" hidden></div></div><div id="chart-legend" class="legend"></div><div class="toolbar"><button class="small-button" id="reset-zoom">Ripristina zoom</button><small>Rotella per ingrandire · passa sui campioni per leggere il valore</small></div><div id="metric-summary" class="metric-summary"></div><div id="metric-episodes"></div><p class="muted">Le somme A+B richiedono due sorgenti esplicite: usa Diagnostica A/B. Le voci del catalogo senza campioni restano selezionabili.</p></div></div>`;
-  const names = [...new Set(state.metrics.map((m) => m.name))];
-  $("#metric-name", root).innerHTML = names
-    .map((n) => `<option>${esc(n)}</option>`)
-    .join("");
-  if (names.includes("rtcp.rtt")) $("#metric-name", root).value = "rtcp.rtt";
+  const options=await api('metric-options?calls='+ids.join(','));
+  if(!root.isConnected)return;
+  const groups=['downstream','upstream','bidirectional','local','peer','unknown'].map(k=>options.find(o=>o.category===k)?.group).filter(Boolean);
+  $('#metric-name',root).innerHTML=groups.map(group=>`<optgroup label="${esc(group)}">${options.filter(o=>o.group===group).map(o=>`<option value="${esc(o.value)}">${esc(o.title)} [${esc(o.name)}]</option>`).join('')}</optgroup>`).join('');
+  if(options.some(o=>o.value==='rtcp.rtt')) $('#metric-name',root).value='rtcp.rtt';
+  const selectedMetric=()=>$('#metric-name',root).value.split('|')[0];
   let request = 0,
     points = [],
     hidden = new Set(),
@@ -252,7 +253,7 @@ async function mountChart(root, ids) {
   let drawn = [],
     bounds = null;
   function statsOptions() {
-    const n = $("#metric-name", root).value;
+    const n = selectedMetric();
     $("#metric-stat", root).innerHTML = state.metrics
       .filter((m) => m.name === n)
       .map((m) => `<option>${esc(m.statistic)}</option>`)
@@ -261,7 +262,7 @@ async function mountChart(root, ids) {
       $("#metric-stat", root).value = "last";
   }
   function seriesKey(p) {
-    return `#${p.call_id} · P${p.perspective_id} · ${p.label} · ${p.direction} · flusso ${p.flow}${p.ssrc ? " · " + p.ssrc : ""}${p.device ? " · " + p.device : ""} · ${p.sample_kind}${p.observer ? " · " + p.observer : ""}`;
+    return `#${p.call_id} · P${p.perspective_id} · ${p.label} · ${p.measurement_context?.label||p.direction} · flusso ${p.flow}${p.ssrc ? " · " + p.ssrc : ""}${p.device ? " · " + p.device : ""} · ${p.sample_kind}${p.observer ? " · " + p.observer : ""}`;
   }
   function series() {
     const groups = new Map();
@@ -398,7 +399,8 @@ async function mountChart(root, ids) {
     const ticket = ++request;
     const params = new URLSearchParams({
       calls: ids.join(","),
-      name: $("#metric-name", root).value,
+      name: selectedMetric(),
+      direction: $("#metric-name",root).value.split("|")[1]||"",
       statistic: $("#metric-stat", root).value,
       invalid: $("#include-invalid", root).checked ? "1" : "0",
     });
@@ -418,6 +420,8 @@ async function mountChart(root, ids) {
     if(params.get('name')==='vd.missing_packets') $('#unit-note',root).textContent='Pacchetti mancanti dichiarati per evento NART: punti isolati, non percentuale e non perdita definitiva. Non sommare segnalazioni come pacchetti unici persi; consulta il messaggio originale.';
     if(params.get('name')==='derived.silence_delta') $('#unit-note',root).textContent='Incremento tra due campioni dello stesso contatore/device/flusso, in ms. Punti isolati al secondo campione; primo valore, reset e intervalli oltre 30 s sono omessi. Entrambi i campioni sono nel tooltip e nel CSV.';
     if(params.get('name').startsWith('incident.')) $('#unit-note',root).textContent='Durata degli episodi al momento della segnalazione (punti isolati). Il tooltip distingue durata dichiarata e minimo stimato. Durate ignote non diventano zero e restano nella tabella. Orari della tabella originali; offset solo sul grafico.';
+    $('#unit-note',root).textContent+=' Direzioni rispetto all’app e al suo peer RTP, che può essere un GW. RTT è bidirezionale. Sorgenti senza ruolo dichiarato: app presunta; xcoder non mappato senza verifica della tratta.';
+    $('#unit-note',root).textContent=(options.find(o=>o.value===$('#metric-name',root).value)?.title||'')+'. '+$('#unit-note',root).textContent;
     if(!data.length) $('#unit-note',root).textContent+=' Nessun campione calcolabile/disponibile nelle chiamate selezionate.';
     $("#chart-legend", root).innerHTML = series()
       .map(
@@ -594,7 +598,7 @@ async function renderSources(page, token) {
         ? imports
             .map(
               (i) =>
-                `<div class="source-card"><form class="source-edit" data-id="${i.id}"><label>Nome dispositivo / sorgente<input name="label" value="${esc(i.label)}" maxlength="120" required></label><label>Correzione orologio (s)<input name="offset" type="number" min="-86400" max="86400" step="0.001" value="${i.clock_offset}"></label><button>Salva</button></form><p class="mono muted">${esc(i.name)} · ${i.file_count} file · ${number(i.event_count)} eventi</p><details><summary>Avvisi di importazione (${JSON.parse(i.warnings).length})</summary><ul>${JSON.parse(
+                `<div class="source-card"><form class="source-edit" data-id="${i.id}"><label>Nome dispositivo / sorgente<input name="label" value="${esc(i.label)}" maxlength="120" required></label><label>Correzione orologio (s)<input name="offset" type="number" min="-86400" max="86400" step="0.001" value="${i.clock_offset}"></label><button>Salva</button></form><p>${esc(sourceDescription(i))}</p><p class="mono muted">${esc(i.name)} · ${i.file_count} file · ${number(i.event_count)} eventi</p><details><summary>Avvisi di importazione (${JSON.parse(i.warnings).length})</summary><ul>${JSON.parse(
                   i.warnings,
                 )
                   .map((w) => `<li>${esc(w)}</li>`)
@@ -671,7 +675,7 @@ function renderSQL(page) {
     }
   });
 }
-async function renderConversations(page, token) {
+async function renderManualConversations(page, token) {
   const conversations = await api("conversations");
   if (token !== renderToken) return;
   const selected = [...state.selected];

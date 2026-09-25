@@ -78,6 +78,8 @@ def enrich_import(db, iid):
     db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', (f'enrichment:{iid}', VERSION))
     from .missing_packets import enrich
     enrich(db,iid)
+    from .conversation_discovery import enrich as discover
+    discover(db,iid)
     return added
 
 
@@ -87,6 +89,8 @@ def enrich_pending(db):
         for iid in ids:
             from .missing_packets import enrich
             enrich(db,iid)
+            from .conversation_discovery import enrich as discover
+            discover(db,iid)
             marker = db.execute('SELECT value FROM meta WHERE key=?', (f'enrichment:{iid}',)).fetchone()
             if not marker or marker[0] != VERSION:
                 enrich_import(db, iid)

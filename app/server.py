@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .db import connect, init, rows
 from .parser import MAX_ZIP, PARSER_VERSION, ingest, sip
 from .catalog import catalog, CATALOG
+from .metric_context import annotate as annotate_metrics, options as metric_options
 from .single_metrics import SINGLE_DERIVED, calculate
 from .diagnostics import diagnostics
 from .manual import import_text, manual_window
@@ -94,7 +95,7 @@ class Handler(BaseHTTPRequestHandler):
             def q(key, default=''):
                 return query.get(key,[default])[0]
             if method == 'GET' and not path.startswith('/api/'):
-                mapping = {'/':'index.html','/app.js':'app.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/style.css':'style.css'}
+                mapping = {'/':'index.html','/app.js':'app.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
                 if path not in mapping:
                     return self.send({'error':'Non trovato'},404)
                 filename = mapping[path]
@@ -128,8 +129,13 @@ class Handler(BaseHTTPRequestHandler):
                     counts['unassigned_metrics'] = db.execute('SELECT COUNT(*) FROM metrics WHERE call_id IS NULL').fetchone()[0]
                     counts['invalid_metrics'] = db.execute('SELECT COUNT(*) FROM metrics WHERE valid=0').fetchone()[0]
                     return self.send(counts)
+                if path == '/api/conversation-groups':
+                    from .conversation_discovery import groups
+                    return self.send(groups(db))
                 if path == '/api/imports':
-                    return self.send(rows(db,'SELECT * FROM imports ORDER BY id DESC'))
+                    from .conversation_discovery import profiles
+                    source = profiles(db)
+                    return self.send([dict(r,source_profile=source.get(r['id'],{})) for r in rows(db,'SELECT * FROM imports ORDER BY id DESC')])
                 if path == '/api/files':
                     return self.send(rows(db,'SELECT f.*,i.label FROM files f JOIN imports i ON i.id=f.import_id ORDER BY f.import_id,f.name'))
                 if path == '/api/calls':
@@ -182,12 +188,20 @@ class Handler(BaseHTTPRequestHandler):
                         if metric['name'] not in known and metric['name'] not in ('derived.buffer_sum','derived.dejitter_sum'):
                             data.append(dict(name=metric['name'],unit=metric['unit'],statistic='sample',samples=0,calculated=metric['name'] in SINGLE_DERIVED))
                     return self.send(data)
+                if path == '/api/metric-options':
+                    ids=[int(x) for x in q('calls').split(',') if x]
+                    if not ids or len(ids)>20: raise ValueError('Seleziona da 1 a 20 chiamate')
+                    return self.send(metric_options(db,ids,catalog(db)))
                 if path == '/api/metrics':
                     ids = [int(x) for x in q('calls').split(',') if x]
                     if not ids or len(ids)>20:
                         raise ValueError('Seleziona da 1 a 20 chiamate')
                     where = f"m.call_id IN ({','.join('?' for _ in ids)}) AND m.name=? AND m.statistic=?"
                     args = [*ids,q('name','rtcp.rtt'),q('statistic','sample')]
+                    if q('direction'):
+                        if q('direction') not in ('incoming','outgoing','roundtrip','combined'): raise ValueError('Direzione non valida')
+                        where+=' AND m.direction=?'
+                        args.append(q('direction'))
                     if q('invalid') != '1':
                         where += ' AND m.valid=1'
                     data = rows(db,f'''SELECT m.*,i.label,i.clock_offset,p.start,p.line_id,f.name filename,COALESCE(m.source_line,e.line_no) line_no
@@ -196,6 +210,8 @@ class Handler(BaseHTTPRequestHandler):
                         WHERE {where} ORDER BY m.ts,m.id LIMIT 100001''',args)
                     if q('name') in SINGLE_DERIVED:
                         data=calculate(db,ids,q('name')) if q('statistic','sample')=='sample' else []
+                        if q('direction'): data=[m for m in data if m['direction']==q('direction')]
+                    annotate_metrics(db,data)
                     if len(data)>100000:
                         raise ValueError('Oltre 100.000 campioni: restringi la selezione')
                     if q('format')=='csv':

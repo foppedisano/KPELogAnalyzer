@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
 
-PARSER_VERSION = '1.6.0'
+PARSER_VERSION = '1.8.0'
 MAX_ZIP = 64 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 MAX_FILE = 40 * 1024 * 1024

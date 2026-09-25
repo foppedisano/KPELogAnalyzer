@@ -72,3 +72,16 @@ Saved analyses contain configurations, not immutable metric snapshots; reopen re
 `GET /api/topology` lists perspectives with nullable session, participant, role, node, note and revision. `POST /api/topology` requires perspective_id, session, participant, role (`app`, `xcoder`, `unknown`); node and note are optional. Revision is 0/omitted for a new association and must match the current revision for updates. Invalid or stale writes return 400. GET /api/perspectives adds observation metadata and a display label; raw import labels and call identities are unchanged. Topology rows are queryable through read-only SQL and included in database exports.
 
 GET /api/metric-names includes documented single-source metrics even without persisted samples. GET /api/metrics supports derived.silence_delta and incident.buffer_underrun/media_missing (statistic=sample), including CSV. Calculations carry evidence arrays; deltas include interval_seconds; incidents include episode metadata and nullable value when duration is unknown. No DB schema change.
+
+GET /api/metric-options?calls=ID restituisce opzioni raggruppate con name, direction, category, group, title, value. GET /api/metrics accetta direction=incoming|outgoing|roundtrip|combined e applica lo stesso filtro al CSV. Le misure e le serie diagnostiche includono measurement_context (category, label, role_basis); direction originale rimane invariata.
+
+
+### Conversation discovery (schema 5)
+
+`GET /api/conversation-groups` returns derived groups with stable `key`, `kind`
+(`uuid`, `sip`, `manual`, `session`), `review`, `call_ids`, `source_count`,
+`perspectives` and `evidence`. Perspectives include export `profile`, attributed
+metric count, raw `status` and `display_status` (including `answered_elsewhere`).
+Evidence identifies the event, import, Call-ID and exact header line. Groups are
+not persisted call merges. `GET /api/imports` and `/api/perspectives` expose
+`source_profile`; version metadata has explicit export scope.

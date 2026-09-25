@@ -169,5 +169,9 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
 
     findings.append(dict(side='A+B',name=derived,peak=peak,threshold=buffer_threshold if source=='vd.buffer' else None,exceeded=source=='vd.buffer' and peak['value']>buffer_threshold,unit='ms',direction='combined'))
 
+ from .metric_context import annotate
+ annotate(db,series)
+ for f in findings: f['perspective_id']=next((c['perspective_id'] for c in coverage if c['side']==f['side']),None)
+ annotate(db,findings)
  return dict(incidents=audio_episodes,incident_warnings=incident_warnings,window=dict(start=lower,end=upper),series=series,coverage=coverage,findings=findings,max_gap_seconds=MAX_GAP,warning='Picchi e soglie sono indizi da verificare nei log. RTT non localizza da solo la rete guasta; la somma dei buffer non misura il ritardo conversazionale. Unità KPE raw escluse.')
 

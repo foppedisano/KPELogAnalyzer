@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>KPELogAnalyzer · Voice observatory</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="KPELogAnalyzer home"
+        ><span class="brand-mark">k.</span
+        ><span
+          >KPE<span class="brand-light">LogAnalyzer</span
+          ><small>VOICE OBSERVATORY</small></span
+        ></a
+      >
+      <div class="workspace-label">
+        WORKSPACE LOCALE <span class="dot"></span>
+      </div>
+      <nav aria-label="Navigazione principale">
+        <button data-view="calls" class="active">
+          <span>◉</span> Chiamate <b id="nav-count">0</b>
+        </button>
+        <button data-view="compare">
+          <span>≋</span> Confronta <b id="selection-count">0</b>
+        </button>
+        <button data-view="diagnostics"><span>∿</span> Diagnostica A/B</button>
+        <button data-view="catalog"><span>?</span> Guida alle metriche</button>
+        <button data-view="identities"><span>◎</span> Identità delle sorgenti</button>
+        <button data-view="topology"><span>⇄</span> App e xcoder</button>
+        <button data-view="manual"><span>＋</span> File e finestre manuali</button>
+        <button data-view="conversations"><span>⌘</span> Conversazioni</button>
+        <button data-view="sources"><span>▤</span> Sorgenti e copertura</button>
+        <button data-view="logs"><span>⌕</span> Esplora log</button>
+        <button data-view="sql"><span>⌨</span> Query SQL</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <span class="dot"></span> Elaborazione sul tuo computer
+        <p>SQLite · Nessun servizio cloud</p>
+        <a href="/api/database" download>↓ Esporta database</a>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div class="breadcrumb">
+          Workspace <span>/</span> <strong id="breadcrumb">Chiamate</strong>
+        </div>
+        <button id="upload-top" class="primary">＋ Importa ZIP</button
+        ><input id="file-input" type="file" accept=".zip" multiple hidden />
+      </header>
+      <div id="notice" role="status" aria-live="polite" hidden></div>
+      <section id="page"></section>
+      <footer>
+        KPELogAnalyzer <span>Log originali → evidenze → analisi</span>
+      </footer>
+    </main>
+    <dialog id="upload-dialog">
+      <form id="upload-form">
+        <div class="eyebrow">NUOVA SORGENTE</div>
+        <h2>Importa i log delle app</h2>
+        <p>
+          Seleziona uno o più ZIP. Ogni archivio mantiene il proprio punto di
+          vista; i Call-ID SIP identici vengono collegati automaticamente.
+        </p>
+        <div
+          id="dropzone"
+          tabindex="0"
+          role="button"
+          aria-label="Seleziona file ZIP"
+        >
+          <strong>Trascina qui gli archivi ZIP</strong
+          ><span
+            >oppure fai clic per selezionarli · massimo 64 MiB per ZIP</span
+          >
+        </div>
+        <div id="upload-files"></div>
+        <label
+          >Etichetta del dispositivo (facoltativa)<input
+            id="upload-label"
+            placeholder="es. iPhone di Alice / host conferenza"
+            maxlength="120"
+        /></label>
+        <p class="muted">
+          Con più archivi, il nome del file viene aggiunto all’etichetta. I log
+          possono contenere numeri, indirizzi e credenziali: il database rimane
+          locale.
+        </p>
+        <div class="actions">
+          <button type="button" id="upload-cancel">Chiudi</button
+          ><button type="submit" class="primary" id="upload-submit">
+            Importa e analizza
+          </button>
+        </div>
+        <p id="upload-progress" role="status"></p>
+      </form>
+    </dialog>
+    <script src="/diagnostics.js" defer></script>
+    <script src="/analysis-ui.js" defer></script>
+    <script src="/topology.js" defer></script>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

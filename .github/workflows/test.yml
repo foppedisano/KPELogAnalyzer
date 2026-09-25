@@ -1,0 +1,28 @@
+name: Tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m unittest discover -v
+      - run: node --check app/static/app.js
+      - run: node --check app/static/diagnostics.js
+      - run: node --check app/static/analysis-ui.js
+      - run: node --check app/static/topology.js
+      - run: docker compose up --build -d
+      - run: python scripts/smoke_test.py --demo
+      - run: docker compose restart analyzer
+      - run: python scripts/smoke_test.py --demo
+      - if: always()
+        run: docker compose logs --tail=100
+      - if: always()
+        run: docker compose down

@@ -1,5 +1,6 @@
 """Local HTTP smoke test. --demo explicitly imports deterministic synthetic ZIPs."""
 import argparse
+import http.client
 import io
 import json
 import sys
@@ -26,7 +27,7 @@ def main():
             health=request('health')
             assert health['ok']
             break
-        except (urllib.error.URLError,TimeoutError):
+        except (urllib.error.URLError,TimeoutError,ConnectionError,http.client.RemoteDisconnected):
             if attempt==19: raise
             time.sleep(2)
     print('Health OK; parser',health['parser_version'])

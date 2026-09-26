@@ -85,3 +85,15 @@ metric count, raw `status` and `display_status` (including `answered_elsewhere`)
 Evidence identifies the event, import, Call-ID and exact header line. Groups are
 not persisted call merges. `GET /api/imports` and `/api/perspectives` expose
 `source_profile`; version metadata has explicit export scope.
+
+## Conteggi per sorgente
+
+`GET /api/imports` aggiunge `call_count` (chiamate distinte nella sorgente),
+`new_call_count` (prima comparsa nella sorgente) ed `existing_call_count`
+(già presenti in una sorgente con ID di importazione inferiore). Ogni chiamata
+conta una volta per ZIP; conversazioni e file ruotati non moltiplicano il totale.
+Il conteggio è ricostruito dalle prospettive attuali, incluse eventuali finestre
+manuali; non è una fotografia immutabile del momento dell’upload. Le sessioni
+senza Call-ID restano separate secondo le regole di attribuzione esistenti.
+Uno ZIP senza chiamate restituisce tre zeri; reimportare lo stesso ZIP non crea
+una nuova sorgente. Nessuna migrazione o modifica ai log.

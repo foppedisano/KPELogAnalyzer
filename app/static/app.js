@@ -99,6 +99,7 @@ async function render() {
   const page = $("#page");
   const views = {
     calls: renderCalls,
+    mos: renderMos,
     compare: renderCompare,
     sources: renderSources,
     logs: renderLogs,
@@ -116,8 +117,22 @@ function stats() {
   const o = state.overview;
   return `<div class="stats"><div class="stat"><span>Chiamate ricostruite</span><strong>${number(o.calls)}</strong><small>Identità SIP e sessioni locali</small></div><div class="stat"><span>Archivi importati</span><strong>${number(o.imports)}</strong><small>Punti di vista indipendenti</small></div><div class="stat"><span>Campioni metrici</span><strong>${number(o.metrics)}</strong><small>${number(o.unassigned_metrics)} non attribuiti</small></div><div class="stat"><span>Eventi indicizzati</span><strong>${number(o.events)}</strong><small>Con file e riga di origine</small></div></div>`;
 }
+function mosCell(c, direction) {
+  const summary = c.mos || {}, m = summary[direction];
+  const source = `Sorgente: ${summary.source || 'non disponibile'} · prospettiva #${summary.perspective_id || '—'}. `;
+  if (!m) return `<td class="mos-cell muted" title="${esc(source + (summary[direction+'_reason'] || summary.reason || 'Dati non disponibili'))}">—</td>`;
+  const color = v => v < 3 ? 'mos-low' : v < 4 ? 'mos-mid' : 'mos-good';
+  const coverage = m.coverage_percent == null ? 'durata totale non nota' : `${number(m.coverage_percent)}% della finestra osservata`;
+  const tip = source + `${m.basis === 'local' ? 'Ricezione locale' : 'Report remoto RTCP'}; ${summary.role_basis === 'app_assumed' ? 'app presunta' : 'app confermata'}. Media pesata su ${number(m.covered_seconds)} s; ${coverage}. Minimo: evento #${m.minimum_event_id}; massimo: evento #${m.maximum_event_id}.`;
+  return `<td class="mos-cell" title="${esc(tip)}"><strong class="${color(m.minimum)}">${number(m.minimum)}</strong> <small>min</small><div><span class="${color(m.mean)}">${number(m.mean)}</span> <small>media</small> · <span class="${color(m.maximum)}">${number(m.maximum)}</span> <small>max</small></div><small>cop. ${m.coverage_percent == null ? '—' : number(m.coverage_percent)+'%'}</small></td>`;
+}
+function callSortValue(c, key) {
+  if (key.startsWith('mos.')) { const [, direction, stat] = key.split('.'); return c.mos?.[direction]?.[stat] ?? null; }
+  if (key === 'duration') return c.connected && c.end ? Math.max(0, timeValue(c.end)-timeValue(c.connected)) : null;
+  return c[key] ?? null;
+}
 function callTable(calls) {
-  return `<div class="table-wrap"><table><thead><tr><th aria-label="Seleziona"></th><th>Chiamata / interlocutori</th><th>Stato osservato</th><th>Durata connessa</th><th>Prospettive</th><th>Metriche</th></tr></thead><tbody>${calls.map((c) => `<tr class="call-row" data-id="${c.id}" tabindex="0"><td><input type="checkbox" class="call-check" aria-label="Seleziona chiamata ${c.id}" value="${c.id}" ${state.selected.has(c.id) ? "checked" : ""}></td><td><div class="identity" title="${esc(c.caller + " → " + c.callee)}">${esc(shortIdentity(c.caller))} <span class="muted">→</span> ${esc(shortIdentity(c.callee))}</div><div class="call-date">${stamp(c.start)} <span class="muted">· #${c.id}</span></div></td><td><span class="tag ${c.status.includes("failed") ? "warn" : c.status.includes("partial") ? "neutral" : ""}">${esc(c.status)}</span></td><td class="mono nowrap">${duration(c)}</td><td>${c.perspectives} <span class="muted">sorgenti</span></td><td class="mono">${number(c.metrics)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th aria-label="Seleziona"></th><th>Chiamata / interlocutori</th><th>MOS ↓ downstream</th><th>MOS ↑ upstream</th><th>Stato osservato</th><th>Durata connessa</th><th>Prospettive</th><th>Metriche</th></tr></thead><tbody>${calls.map((c) => `<tr class="call-row" data-id="${c.id}" tabindex="0"><td><input type="checkbox" class="call-check" aria-label="Seleziona chiamata ${c.id}" value="${c.id}" ${state.selected.has(c.id) ? "checked" : ""}></td><td><div class="identity" title="${esc(c.caller + " → " + c.callee)}">${esc(shortIdentity(c.caller))} <span class="muted">→</span> ${esc(shortIdentity(c.callee))}</div><div class="call-date">${stamp(c.start)} <span class="muted">· #${c.id}</span></div></td>${mosCell(c,"downstream")}${mosCell(c,"upstream")}<td><span class="tag ${c.status.includes("failed") ? "warn" : c.status.includes("partial") ? "neutral" : ""}">${esc(c.status)}</span></td><td class="mono nowrap">${duration(c)}</td><td>${c.perspectives} <span class="muted">sorgenti</span></td><td class="mono">${number(c.metrics)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function bindCalls() {
   $$(".call-row").forEach((row) => {
@@ -149,12 +164,19 @@ function renderCalls(page) {
       `<span class="tag">● Workspace privato</span>`,
     ) +
     stats() +
-    `<div class="panel"><div class="panel-head"><h2>Registro chiamate</h2><div class="toolbar"><input id="call-search" aria-label="Cerca chiamate" placeholder="Cerca interlocutore o Call-ID…"><button id="compare-selected">Confronta selezionate →</button></div></div><div id="call-list"></div><div class="table-note">Orari originali dei log, senza fuso dichiarato. Seleziona più righe per confrontare chiamate o partecipanti. Massimo 2.000 chiamate elencate.</div></div>`;
+    `<div class="panel"><div class="panel-head"><h2>Registro chiamate</h2><div class="toolbar"><input id="call-search" aria-label="Cerca chiamate" placeholder="Cerca interlocutore o Call-ID…"><button id="compare-selected">Confronta selezionate →</button></div></div><div class="call-sort toolbar"><label>Ordina per <select id="call-sort"><option value="start">Data</option><option value="duration">Durata connessa</option><option value="status">Stato osservato</option><option value="metrics">Numero metriche</option>${['downstream','upstream'].map(d=>['minimum','mean','maximum'].map((v,i)=>`<option value="mos.${d}.${v}">MOS ${d} · ${['minimo','medio','massimo'][i]}</option>`).join('')).join('')}</select></label><label>Ordine <select id="call-order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label><span class="muted">MOS: minimo in evidenza · media pesata · copertura temporale</span></div><div id="call-list"></div><div class="table-note">Orari originali dei log, senza fuso dichiarato. Seleziona più righe per confrontare chiamate o partecipanti. Massimo 2.000 chiamate elencate; ordinamento su queste righe. MOS a profilo fisso, sola perdita RTCP: rosso &lt;3, arancio 3–4, verde ≥4 (soglie indicative). Prospettiva dell’ultimo import, senza unire export o flussi; sorgente nel tooltip. Dati mancanti in fondo.</div></div>`;
   function list() {
     const text = $("#call-search").value.toLowerCase();
     const calls = state.calls.filter((c) =>
       (c.caller + c.callee + c.sip_call_id).toLowerCase().includes(text),
     );
+    const key = $("#call-sort").value, sign = $("#call-order").value === 'asc' ? 1 : -1;
+    calls.sort((a,b) => {
+      const x = callSortValue(a,key), y = callSortValue(b,key);
+      if (x == null || y == null) return x == null && y == null ? a.id-b.id : x == null ? 1 : -1;
+      return sign * (typeof x === 'string' ? x.localeCompare(y) : x-y) || a.id-b.id;
+    });
+    state.callSort = key; state.callOrder = $("#call-order").value;
     $("#call-list").innerHTML = calls.length
       ? callTable(calls)
       : empty(
@@ -165,6 +187,10 @@ function renderCalls(page) {
         );
     bindCalls();
   }
+  $("#call-sort").value = state.callSort || 'start';
+  $("#call-order").value = state.callOrder || 'desc';
+  $("#call-sort").onchange = () => { $("#call-order").value = $("#call-sort").value.startsWith('mos.') ? 'asc' : 'desc'; list(); };
+  $("#call-order").onchange = list;
   list();
   $("#call-search").oninput = list;
   $("#compare-selected").onclick = safe(() => setView("compare"));
@@ -188,7 +214,7 @@ async function detail(id) {
       "Segnalazione, statistiche e contesto della sessione.",
       `<button id="select-detail">${state.selected.has(id) ? "Rimuovi dal confronto" : "Aggiungi al confronto"}</button>`,
     ) +
-    `<div class="detail-meta"><div><span>PRIMA EVIDENZA</span><strong>${stamp(c.start)}</strong></div><div><span>CONNESSIONE</span><strong>${stamp(c.connected)}</strong></div><div><span>ULTIMA TERMINAZIONE</span><strong>${stamp(c.end)}</strong></div><div><span>DURATA CONNESSA*</span><strong>${duration(c)}</strong></div></div><p class="mono muted">Call-ID: ${esc(c.sip_call_id || "Non disponibile · sessione locale")}</p><p class="muted">* Intervallo osservato; con più sorgenti non corregge eventuali differenze tra gli orologi.</p><div class="panel"><div class="panel-head"><h2>Punti di vista</h2><span class="tag neutral">${ps.length} sorgenti</span></div>${ps.map((p) => `<div class="perspective"><strong>${esc(p.label)} <span class="tag neutral">${esc(p.direction)}</span> <span class="tag">${esc(p.status)}</span></strong><small>${esc(sourceDescription(p))}</small><small>App ${esc(p.app_version || "versione non documentata")} ${p.version_event_id ? "(evento " + p.version_event_id + ")" : ""} · Linea ${p.line_id ?? "non nota"} · ${esc(p.evidence)} · offset grafico ${p.clock_offset}s</small><small>${stamp(p.start)} → ${stamp(p.end)}</small></div>`).join("")}</div><div id="analysis-panel"></div><div id="chart-panel"></div><div id="detail-events"></div>`;
+    `<div class="detail-meta"><div><span>PRIMA EVIDENZA</span><strong>${stamp(c.start)}</strong></div><div><span>CONNESSIONE</span><strong>${stamp(c.connected)}</strong></div><div><span>ULTIMA TERMINAZIONE</span><strong>${stamp(c.end)}</strong></div><div><span>DURATA CONNESSA*</span><strong>${duration(c)}</strong></div></div><p class="mono muted">Call-ID: ${esc(c.sip_call_id || "Non disponibile · sessione locale")}</p><p class="muted">* Intervallo osservato; con più sorgenti non corregge eventuali differenze tra gli orologi.</p><div class="panel"><div class="panel-head"><h2>Punti di vista</h2><span class="tag neutral">${ps.length} sorgenti</span></div>${ps.map((p) => `<div class="perspective"><strong>${esc(p.label)} <span class="tag neutral">${esc(p.direction)}</span> <span class="tag">${esc(p.status)}</span></strong><small>${esc(sourceDescription(p))}</small><small>App ${esc(p.app_version || "versione non documentata")} ${p.version_event_id ? "(evento " + p.version_event_id + ")" : ""} · Linea ${p.line_id ?? "non nota"} · ${esc(p.evidence)} · offset grafico ${p.clock_offset}s</small><small>${stamp(p.start)} → ${stamp(p.end)}</small></div>`).join("")}</div><button id="open-mos">MOS e ricezione di questa chiamata →</button><div id="analysis-panel"></div><div id="chart-panel"></div><div id="detail-events"></div>`;
   $("#back-calls").onclick = safe(() => setView("calls"));
   $("#select-detail").onclick = () => {
     state.selected.has(id) ? state.selected.delete(id) : state.selected.add(id);
@@ -197,6 +223,7 @@ async function detail(id) {
       ? "Rimuovi dal confronto"
       : "Aggiungi al confronto";
   };
+  $("#open-mos").onclick = safe(() => { window.mosLocal = ps[0]?.id; return setView("mos"); });
   await mountChart($("#chart-panel"), [id]);
   await mountAnalysis($("#analysis-panel"), id);
   await mountEvents($("#detail-events"), { call: id }, true);
@@ -315,13 +342,13 @@ async function mountChart(root, ids) {
       xmax = -Infinity;
     for (const p of all) {
       xmin = Math.min(xmin, p.x);
-      xmax = Math.max(xmax, p.x);
+      xmax = Math.max(xmax, p.valid_until ? p.x + timeValue(p.valid_until) - timeValue(p.ts) : p.x);
     }
     if (xmin === xmax) xmax = xmin + 1000;
     if (zoom) {
       [xmin, xmax] = zoom;
     }
-    all = all.filter((p) => p.x >= xmin && p.x <= xmax);
+    all = all.filter((p) => (p.x >= xmin || (p.valid_until && p.x + timeValue(p.valid_until) - timeValue(p.ts) > xmin)) && p.x <= xmax);
     let ymin = 0,
       ymax = 0;
     for (const p of all) {
@@ -366,10 +393,13 @@ async function mountChart(root, ids) {
         const x = absolute
           ? timeValue(p.ts) + p.clock_offset * 1000
           : timeValue(p.ts) - timeValue(p.start);
-        if (x < xmin || x > xmax) continue;
+        if (x > xmax || (x < xmin && (!p.valid_until || x + timeValue(p.valid_until) - timeValue(p.ts) <= xmin))) continue;
         const px = sx(x),
           py = sy(p.value);
-        if (last === null || x - last > 30000 || ['event','interval','episode'].includes(p.sample_kind)) ctx.moveTo(px, py);
+        if (p.sample_kind === 'step') {
+          const until = timeValue(p.valid_until) + (absolute ? p.clock_offset * 1000 : -timeValue(p.start));
+          ctx.moveTo(sx(Math.max(x,xmin)),py); ctx.lineTo(sx(Math.min(until,xmax)),py);
+        } else if (last === null || x - last > 30000 || ['event','interval','episode'].includes(p.sample_kind)) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
         last = x;
         drawn.push({ px, py, p, key });
@@ -500,6 +530,7 @@ async function mountChart(root, ids) {
     const p = closest.p;
     tooltip.textContent = `${number(p.value)} ${p.unit}${p.valid ? "" : " · VALORE ANOMALO"}\n${stamp(p.ts)}\n${closest.key}\n${p.filename}:${p.line_no}`;
     if(p.evidence) tooltip.textContent+='\n'+p.evidence.map(e=>`evento ${e.event_id} · ${e.filename}:${e.line}`).join('\n');
+    if(p.valid_until) tooltip.textContent+=`\nValido fino a: ${p.valid_until} · perdita ${number(p.loss_percent)}% · ${p.model.version}`;
     if(p.interval_seconds) tooltip.textContent+=`\nIntervallo: ${number(p.interval_seconds)} s`;
     if(p.episode) tooltip.textContent+='\n'+incidentDuration(p.episode)+' · '+p.episode.status;
     tooltip.hidden = false;
@@ -591,14 +622,14 @@ async function renderSources(page, token) {
     title(
       "PROVENIENZA E QUALITÀ",
       "Ogni sorgente ha un punto di vista.",
-      "Controlla copertura e limiti di parsing. La correzione orologio si applica solo al grafico assoluto; i timestamp originali rimangono disponibili.",
+      "Le chiamate sono contate una volta per ZIP, anche se già presenti in altri export; non sono conversazioni. Nuove/già presenti segue l’ordine di importazione. La correzione orologio si applica solo al grafico assoluto; i timestamp originali rimangono disponibili.",
     ) +
     `<div class="panel">${
       imports.length
         ? imports
             .map(
               (i) =>
-                `<div class="source-card"><form class="source-edit" data-id="${i.id}"><label>Nome dispositivo / sorgente<input name="label" value="${esc(i.label)}" maxlength="120" required></label><label>Correzione orologio (s)<input name="offset" type="number" min="-86400" max="86400" step="0.001" value="${i.clock_offset}"></label><button>Salva</button></form><p>${esc(sourceDescription(i))}</p><p class="mono muted">${esc(i.name)} · ${i.file_count} file · ${number(i.event_count)} eventi</p><details><summary>Avvisi di importazione (${JSON.parse(i.warnings).length})</summary><ul>${JSON.parse(
+                `<div class="source-card"><form class="source-edit" data-id="${i.id}"><label>Nome dispositivo / sorgente<input name="label" value="${esc(i.label)}" maxlength="120" required></label><label>Correzione orologio (s)<input name="offset" type="number" min="-86400" max="86400" step="0.001" value="${i.clock_offset}"></label><button>Salva</button></form><p>${esc(sourceDescription(i))}</p><p class="mono muted">${esc(i.name)} · ${i.file_count} file · ${number(i.event_count)} eventi · <strong>${number(i.call_count)} chiamate distinte</strong></p><p>${number(i.new_call_count)} nuove nel DB · ${number(i.existing_call_count)} già presenti nelle importazioni precedenti</p><details><summary>Avvisi di importazione (${JSON.parse(i.warnings).length})</summary><ul>${JSON.parse(
                   i.warnings,
                 )
                   .map((w) => `<li>${esc(w)}</li>`)

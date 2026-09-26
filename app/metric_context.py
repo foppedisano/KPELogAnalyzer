@@ -15,8 +15,8 @@ def context(name,direction,role='app'):
     if name in ('rtcp.rtt','network.ping','kpe.common.rtt') or name in ('derived.buffer_sum','derived.dejitter_sum'):
         return dict(category='bidirectional',label='Andata e ritorno' if 'rtt' in name or name=='network.ping' else 'Indicatore combinato A+B')
     local=(name.startswith('vd.') or name.startswith('incident.') or name=='derived.silence_delta'
-           or name=='rtcp.packets_received' or (name in ('rtcp.jitter','rtcp.loss') and direction=='incoming'))
-    peer=name in ('rtcp.jitter','rtcp.loss') and direction=='outgoing'
+           or name=='rtcp.packets_received' or (name in ('rtcp.jitter','rtcp.loss','derived.mos_reference') and direction=='incoming'))
+    peer=name in ('rtcp.jitter','rtcp.loss','derived.mos_reference') and direction=='outgoing'
     if local:
         return dict(category='downstream' if role=='app' else 'local',label='Downstream · misurato nell’app' if role=='app' else 'Ricezione locale del componente · tratta da verificare')
     if peer:
@@ -42,7 +42,7 @@ def options(db,ids,catalog):
     for metric in catalog:
         name=metric['name']
         if name in ('derived.buffer_sum','derived.dejitter_sum'):continue
-        directions=['incoming','outgoing'] if name in ('rtcp.jitter','rtcp.loss') else ['']
+        directions=['incoming','outgoing'] if name in ('rtcp.jitter','rtcp.loss','derived.mos_reference') else ['']
         for direction in directions:
             c=context(name,direction,role)
             output.append(dict(name=name,direction=direction,category=c['category'],group=GROUPS[c['category']],

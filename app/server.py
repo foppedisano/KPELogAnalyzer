@@ -95,7 +95,7 @@ class Handler(BaseHTTPRequestHandler):
             def q(key, default=''):
                 return query.get(key,[default])[0]
             if method == 'GET' and not path.startswith('/api/'):
-                mapping = {'/':'index.html','/app.js':'app.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
+                mapping = {'/':'index.html','/app.js':'app.js','/mos.js':'mos.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
                 if path not in mapping:
                     return self.send({'error':'Non trovato'},404)
                 filename = mapping[path]
@@ -103,6 +103,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send((STATIC/filename).read_bytes(),mime=mime+'; charset=utf-8')
             db = connect()
             if method == 'GET':
+                if path == '/api/mos':
+                    from .mos import analysis
+                    return self.send(analysis(db,int(q('local')),int(q('peer')) if q('peer') else None,q('local_role','app')))
                 if path == '/api/topology':
                     return self.send(topology_listing(db))
                 if path == '/api/saved-analyses':
@@ -135,15 +138,27 @@ class Handler(BaseHTTPRequestHandler):
                 if path == '/api/imports':
                     from .conversation_discovery import profiles
                     source = profiles(db)
-                    return self.send([dict(r,source_profile=source.get(r['id'],{})) for r in rows(db,'SELECT * FROM imports ORDER BY id DESC')])
+                    data = rows(db, '''WITH first_seen AS (
+                        SELECT call_id,MIN(import_id) first_import FROM perspectives GROUP BY call_id
+                    ), counts AS (
+                        SELECT p.import_id,COUNT(DISTINCT p.call_id) call_count,
+                            COUNT(DISTINCT CASE WHEN p.import_id=f.first_import THEN p.call_id END) new_call_count
+                        FROM perspectives p JOIN first_seen f ON f.call_id=p.call_id GROUP BY p.import_id
+                    ) SELECT i.*,COALESCE(c.call_count,0) call_count,
+                        COALESCE(c.new_call_count,0) new_call_count,
+                        COALESCE(c.call_count-c.new_call_count,0) existing_call_count
+                    FROM imports i LEFT JOIN counts c ON c.import_id=i.id ORDER BY i.id DESC''')
+                    return self.send([dict(r,source_profile=source.get(r['id'],{})) for r in data])
                 if path == '/api/files':
                     return self.send(rows(db,'SELECT f.*,i.label FROM files f JOIN imports i ON i.id=f.import_id ORDER BY f.import_id,f.name'))
                 if path == '/api/calls':
-                    return self.send(rows(db,"""SELECT c.*, (SELECT COUNT(*) FROM perspectives p WHERE p.call_id=c.id) perspectives,
+                    from .mos import call_summary
+                    calls = rows(db,"""SELECT c.*, (SELECT COUNT(*) FROM perspectives p WHERE p.call_id=c.id) perspectives,
                         (SELECT COUNT(*) FROM metrics m WHERE m.call_id=c.id) metrics,
                         (SELECT group_concat(DISTINCT status) FROM perspectives p WHERE p.call_id=c.id) status
                         FROM calls c WHERE c.caller LIKE ? OR c.callee LIKE ? OR COALESCE(c.sip_call_id,'') LIKE ?
-                        ORDER BY c.start DESC LIMIT 2000""", ('%'+q('search')+'%',)*3))
+                        ORDER BY c.start DESC LIMIT 2000""", ('%'+q('search')+'%',)*3)
+                    return self.send([dict(c,mos=call_summary(db,c['id'])) for c in calls])
                 if path == '/api/perspectives':
                     return self.send(decorate(db,rows(db,'''SELECT p.*,i.label,i.clock_offset,
                         (SELECT version FROM app_versions v WHERE v.import_id=p.import_id AND v.ts<=p.start ORDER BY v.ts DESC,v.event_id DESC LIMIT 1) app_version,

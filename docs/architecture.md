@@ -41,7 +41,7 @@
 
 ## Deliberate limits
 
-The parser is empirical, based on an iOS export, not on the full proprietary KPE specification. No RTP packet capture decoding, automatic MOS, Android format guarantees, automatic conference graph, SDP negotiation state machine, NAT root-cause diagnosis, or audio reconstruction. SIP forking is represented at Call-ID level, not separate From/To-tag dialogs. SIP 2xx evidence on re-INVITE may be the first observed connection when the initial dialog is truncated. Line windows cannot be recovered reliably from RTP timestamps alone.
+The parser is empirical, based on an iOS export, not on the full proprietary KPE specification. No RTP packet capture decoding, measured perceptual MOS, Android format guarantees, automatic conference graph, SDP negotiation state machine, NAT root-cause diagnosis, or audio reconstruction. SIP forking is represented at Call-ID level, not separate From/To-tag dialogs. SIP 2xx evidence on re-INVITE may be the first observed connection when the initial dialog is truncated. Line windows cannot be recovered reliably from RTP timestamps alone.
 
 A ZIP is a source snapshot, not a permanently identified device. Two snapshots of one device can duplicate observations across imports; the UI separates these series. Within a source a given Call-ID has one perspective; highly unusual Call-ID reuse or multiple line assignments for one Call-ID require a richer schema. Global call timestamps aggregate raw per-source timestamps; durations are not clock-corrected. Partial windows closed by line reuse are labelled incomplete.
 
@@ -90,3 +90,9 @@ Repeated exports may yield multiple perspectives of one physical device. The UI
 selects the richest perspective per Call-ID initially, with explicit selection of
 additional observations. This is a convenience, not participant identification.
 See [the user guide](conversations.md) for Android coverage and interpretation.
+
+## Fixed-reference loss score
+
+`app/mos.py` computes bounded, on-demand step intervals from RTCP loss.
+No schema changes or persisted scores. Explicit peer selection reuses the peer
+local result without mixing evidence or changing call identities. See [MOS](mos.md).

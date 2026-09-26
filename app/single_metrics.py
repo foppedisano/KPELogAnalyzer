@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from .db import rows
 from .incidents import incidents
 
-SINGLE_DERIVED = ('derived.silence_delta', 'incident.buffer_underrun', 'incident.media_missing')
+SINGLE_DERIVED = ('derived.mos_reference', 'derived.silence_delta', 'incident.buffer_underrun', 'incident.media_missing')
 
 
 def silence_delta(points, max_gap=30):
@@ -17,6 +17,9 @@ def silence_delta(points, max_gap=30):
 
 
 def calculate(db, ids, name):
+    if name == 'derived.mos_reference':
+        from .mos import calculate as mos
+        return mos(db, ids)
     marks=','.join('?' for _ in ids)
     if name=='derived.silence_delta':
         data=rows(db,f'''SELECT m.*,i.label,i.clock_offset,p.start,p.line_id,f.name filename,

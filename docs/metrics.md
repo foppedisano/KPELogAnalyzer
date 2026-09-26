@@ -247,6 +247,16 @@ Conteggio RTP trasmesso dichiarato dal motore.
 
 **Limiti:** last/avg/min/max restano distinti; finestra statistica e unità non dichiarate non vengono dedotte. Le metriche raw non entrano nel grafico in millisecondi. Valori non numerici, NaN e infinito non diventano zero.
 
+### MOS a profilo fisso · sola perdita — `derived.mos_reference`
+
+**Unità:** MOS. **Tipo:** derived step.
+
+Indice stimato a profilo costante per confrontare la perdita nelle due direzioni. R=93.2−95p/(p+25.1), limitato a 0–100; MOS=1+0.035R+0.000007R(R−60)(100−R).
+
+**Origine e calcolo:** Perdita RTCP (%) locale o dichiarata dal peer. Profilo loss-reference-1: G.711 10 ms, PLC Appendix I, Ie=0, Bpl=25.1, BurstR=1, R base=93.2..
+
+**Limiti:** Non è qualità vocale misurata né E-model completo. Non valuta jitter, ritardo, scarti, burst o PLC reale. Il report riguarda il passato; il valore viene mantenuto al massimo 30 s fino al report successivo o alla fine chiamata. Report invalidi o discordanti interrompono la curva. Nel pannello MOS il peer è scelto esplicitamente e la sua ricezione locale è riutilizzata. Riferimenti: ITU-T G.107 (2015), G.113 (2024) tabella I.4.
+
 ## Lettura del grafico e dei momenti critici
 
 La diagnostica mostra A continuo, B tratteggiato, WARNING come punti isolati; anche i delta sono punti riferiti a intervalli. Le linee si interrompono per distanze superiori a 30 secondi. Il tooltip condiviso mostra per ciascuna serie il campione più vicino entro ±2,5 secondi, con il suo orario effettivo: valori visualizzati insieme non sono necessariamente simultanei. Dove manca un campione compare una lacuna esplicita. Le metriche derivate sono riconoscibili dal prefisso `derived.`.

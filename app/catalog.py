@@ -30,6 +30,9 @@ for name, title, meaning in [
  CATALOG.append(dict(name='kpe.'+name,title=title,unit='packets' if 'rtp_pkt' in name else 'raw',kind='reported statistic',source='JSON incoming/outgoing → '+name.replace('.', ' → ')+' → last/avg/min/max',meaning=meaning,limits='last/avg/min/max restano distinti; finestra statistica e unità non dichiarate non vengono dedotte. Le metriche raw non entrano nel grafico in millisecondi. Valori non numerici, NaN e infinito non diventano zero.'))
 
 
+CATALOG.append(dict(name='derived.mos_reference',title='MOS a profilo fisso · sola perdita',unit='MOS',kind='derived step',source='Perdita RTCP (%) locale o dichiarata dal peer. Profilo loss-reference-1: G.711 10 ms, PLC Appendix I, Ie=0, Bpl=25.1, BurstR=1, R base=93.2.',meaning='Indice stimato a profilo costante per confrontare la perdita nelle due direzioni. R=93.2−95p/(p+25.1), limitato a 0–100; MOS=1+0.035R+0.000007R(R−60)(100−R).',limits='Non è qualità vocale misurata né E-model completo. Non valuta jitter, ritardo, scarti, burst o PLC reale. Il report riguarda il passato; il valore viene mantenuto al massimo 30 s fino al report successivo o alla fine chiamata. Report invalidi o discordanti interrompono la curva. Nel pannello MOS il peer è scelto esplicitamente e la sua ricezione locale è riutilizzata. Riferimenti: ITU-T G.107 (2015), G.113 (2024) tabella I.4.'))
+
+
 def catalog(db):
  result = list(CATALOG)
  known = {x['name'] for x in result}

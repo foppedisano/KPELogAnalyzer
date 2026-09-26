@@ -51,6 +51,13 @@ La vista **Diagnostica A/B** sovrappone RTT, massimo ritardo di arrivo NART, tar
 
 Per VDlog/rtplog sciolti usa **File e finestre manuali**. Per capire ogni parametro apri **Guida alle metriche**, il [catalogo completo](docs/metrics.md) e la [guida operativa e upgrade](docs/diagnostics.md). Le soglie segnalano momenti da verificare: non individuano automaticamente una rete guasta e non misurano il ritardo audio end-to-end.
 
+## MOS a profilo fisso
+
+La vista **MOS e ricezione** mostra due stime a gradini basate sulla perdita RTCP,
+con codec e PLC di riferimento costanti. Selezionando il GW della tratta, la sua
+ricezione locale è riutilizzata come upstream dell’app. Silenzio saltato e missing
+packets restano evidenze separate. [Metodo, limiti e API](docs/mos.md).
+
 ## App e xcoder
 
 La vista **App e xcoder** collega, per singola sessione e partecipante, le osservazioni dell’app e del transcoder. Confronta anche quattro o più sorgenti con metriche ed episodi sullo stesso asse temporale. Il collegamento è esplicito e non fonde i Call-ID. [Guida e upgrade](docs/xcoder.md). Il formato xcoder è assunto uguale a quello delle app, **senza validazione su log reali**: [open issue](docs/open-issues.md).

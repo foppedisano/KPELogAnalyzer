@@ -121,3 +121,8 @@ Il selettore della chiamata/Confronta raggruppa le metriche in Downstream (ricez
 In Diagnostica A/B e App e xcoder, legenda e tooltip indicano chi misura; il filtro Direzione delle curve limita curve e relativo tooltip. Gli episodi audio restano visibili come contesto separato. Il filtro è temporaneo e non modifica le metriche selezionate nelle analisi salvate né il JSON completo esportato.
 
 Una sorgente senza ruolo dichiarato è trattata come app presunta, esplicitamente segnalata nell’interfaccia e con role_basis=app_assumed nell’API. Con ruolo app confermato la classificazione è confermata. Con ruolo xcoder/unknown (o confronti misti) il menu usa Ricezione locale / Ricezione del peer, senza assegnare upstream/downstream finché non è verificato il flusso della tratta app–xcoder. Il ruolo xcoder da solo non prova la tratta: il suo incoming può essere upstream dell’app oppure arrivare da un altro nodo. Il peer RTP può essere il GW, non il telefono dell’interlocutore. Questi indicatori distinguono le condizioni delle direzioni ma non localizzano da soli il guasto nella rete d’accesso.
+
+## MOS e ricezione
+
+Usare la vista dedicata **MOS e ricezione**, oppure il parametro MOS a profilo
+fisso in chiamata e Confronta. [Metodo e selezione esplicita del GW](mos.md).

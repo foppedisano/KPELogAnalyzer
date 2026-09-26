@@ -863,3 +863,5 @@ fieldset { border:1px solid var(--line);border-radius:8px;margin:16px 0;padding:
 .diagnostic-legend { max-height:420px;overflow:auto; }
 
 .conversation-legs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}.conversation-legs .source-card{min-width:0;overflow-wrap:anywhere}.conversation-legs .mono{word-break:break-all}#group-detail{scroll-margin-top:20px}#group-search{min-width:240px;flex:1}
+
+.mos-cell{min-width:145px;white-space:nowrap;font-variant-numeric:tabular-nums}.mos-cell strong{font-size:20px}.mos-cell small{font-size:10px;color:var(--muted)}.mos-cell div{font-size:12px;margin:3px 0}.mos-low{color:#b42318}.mos-mid{color:#925400}.mos-good{color:#18734c}.call-sort{padding:12px 20px;flex-wrap:wrap}.call-sort label{display:flex;align-items:center;gap:8px}.call-sort .muted{font-size:12px}

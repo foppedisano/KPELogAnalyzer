@@ -15,8 +15,10 @@ def context(name,direction,role='app'):
     if name in ('rtcp.rtt','network.ping','kpe.common.rtt') or name in ('derived.buffer_sum','derived.dejitter_sum'):
         return dict(category='bidirectional',label='Andata e ritorno' if 'rtt' in name or name=='network.ping' else 'Indicatore combinato A+B')
     local=(name.startswith('vd.') or name.startswith('incident.') or name=='derived.silence_delta'
-           or name=='rtcp.packets_received' or (name in ('rtcp.jitter','rtcp.loss','derived.mos_reference') and direction=='incoming'))
-    peer=name in ('rtcp.jitter','rtcp.loss','derived.mos_reference') and direction=='outgoing'
+           or name=='rtcp.packets_received' or (name in ('rtcp.jitter','rtcp.loss','derived.mos_reference','telemetry.network_loss') and direction=='incoming'))
+    peer=name in ('rtcp.jitter','rtcp.loss','derived.mos_reference','telemetry.network_loss') and direction=='outgoing'
+    if role=='gw' and (local or peer):
+        return dict(category='upstream' if local else 'downstream',label='Upstream · ricezione GW' if local else 'Downstream · report del peer del GW')
     if local:
         return dict(category='downstream' if role=='app' else 'local',label='Downstream · misurato nell’app' if role=='app' else 'Ricezione locale del componente · tratta da verificare')
     if peer:
@@ -28,9 +30,9 @@ def annotate(db,data):
     roles={r['perspective_id']:r['role'] for r in rows(db,'SELECT perspective_id,role FROM observation_roles')}
     for m in data:
         pid=m.get('perspective_id')
-        role=roles.get(pid,'app')
+        role=roles.get(pid,m.get('role','app'))
         m['measurement_context']=context(m['name'],m.get('direction',''),role)
-        m['measurement_context']['role_basis']='confirmed' if pid in roles else 'app_assumed'
+        m['measurement_context']['role_basis']='confirmed' if pid in roles else 'telemetry' if 'role' in m else 'app_assumed'
     return data
 
 
@@ -42,7 +44,7 @@ def options(db,ids,catalog):
     for metric in catalog:
         name=metric['name']
         if name in ('derived.buffer_sum','derived.dejitter_sum'):continue
-        directions=['incoming','outgoing'] if name in ('rtcp.jitter','rtcp.loss','derived.mos_reference') else ['']
+        directions=['incoming','outgoing'] if name in ('rtcp.jitter','rtcp.loss','derived.mos_reference','telemetry.network_loss') else ['']
         for direction in directions:
             c=context(name,direction,role)
             output.append(dict(name=name,direction=direction,category=c['category'],group=GROUPS[c['category']],

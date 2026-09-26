@@ -38,6 +38,23 @@ class APITests(unittest.TestCase):
     def upload(self,files=None):
         return self.request('POST','/api/imports',archive(files or sample()),{'X-Filename':'synthetic.zip'})
 
+    def test_structured_telemetry_api_and_mixed_mos_csv(self):
+        from tests.test_telemetry_store import events
+        structured=events()
+        for e in structured:
+            if 'stream' in e['payload']:e['payload']['stream']['sip_call_id']='call-a'
+        files=sample()
+        files['telemetry.jsonl']='\n'.join(map(json.dumps,structured))
+        self.assertEqual(self.upload(files)[0],201)
+        code,status=self.request('GET','/api/telemetry')
+        self.assertEqual(code,200)
+        self.assertEqual(status['intervals'],2)
+        cid=self.request('GET','/api/calls')[1][0]['id']
+        code,data=self.request('GET',f'/api/metrics?calls={cid}&name=derived.mos_reference&format=csv')
+        self.assertEqual(code,200)
+        self.assertIn(b'UTC',data)
+        self.assertEqual(self.request('GET','/api/geography?access=cellular')[1]['seconds'],2)
+
     def test_import_browse_csv_and_database_snapshot(self):
         status,result=self.upload();self.assertEqual(status,201)
         cid=self.request('GET','/api/calls')[1][0]['id']

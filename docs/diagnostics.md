@@ -18,7 +18,11 @@ Senza eventi di ciclo chiamata i campioni restano correttamente non attribuiti. 
 
 In **File e finestre manuali → Modifica una finestra manuale**, seleziona la finestra e correggi titolo, linea o orari. Gli identificativi restano invariati; i campioni fuori dalla nuova finestra tornano non attribuiti e quelli compatibili entrano nella finestra. La cronologia conserva lo stato precedente. Le chiamate ricostruite automaticamente non sono modificabili da questo modulo.
 
-## Upgrade dalla versione iniziale
+## Upgrade storico dalla versione iniziale
+
+Questa sezione descrive il passaggio 1→2; la versione attuale arriva a schema 8
+attraverso le migrazioni successive. Vedi [architettura](architecture.md) e
+[aggiornamento e backup](getting-started.md#arresto-aggiornamento-e-backup).
 
 Prima dell’aggiornamento scarica **Esporta database**, quindi esegui:
 
@@ -44,7 +48,7 @@ WHERE m.call_id=1 AND m.name LIKE 'vd.%'
 ORDER BY m.ts;
 ```
 
-Le metriche `derived.*` vengono calcolate al momento attraverso `/api/diagnostics`; i dati di partenza restano interrogabili in SQL. Vedi [API](api.md).
+I delta e le somme diagnostiche vengono calcolati al momento attraverso `/api/diagnostics`; i dati di partenza restano interrogabili in SQL. Vedi [API](api.md).
 
 
 ## Configurare e salvare un’analisi
@@ -85,7 +89,7 @@ Non serve reimportare gli ZIP né migrare lo schema: gli episodi sono ricostruit
 
 ## Calcoli nel grafico della singola chiamata
 
-Il selettore Parametro della chiamata e di Confronta comprende tutte le metriche
+Il pannello **Aggiungi metriche** della chiamata e di Confronta comprende tutte le metriche
 singole documentate, anche senza campioni. Le metriche calcolate sono generate
 su richiesta, senza migrazione o reimportazione:
 
@@ -100,7 +104,7 @@ su richiesta, senza migrazione o reimportazione:
   tabella e nel CSV ma non diventano punti a zero. AWT e VD restano separati.
 
 Tooltip e CSV conservano gli eventi di origine, anche entrambi i campioni del
-contatore. Il menu non garantisce che vi siano osservazioni nella chiamata:
+contatore. La selezione non garantisce che vi siano osservazioni nella chiamata:
 quando mancano dati compare una spiegazione. Le metriche persistite (RTCP,
 ping, VD e statistiche KPE) mantengono i propri valori e statistiche.
 
@@ -108,15 +112,19 @@ Le somme `derived.buffer_sum` e `derived.dejitter_sum` richiedono due prospettiv
 esplicitamente scelte: usare Diagnostica A/B, anche se le due prospettive sono
 nella stessa chiamata. Nessun secondo lato è scelto automaticamente.
 
+Per il grafico multimetriche della chiamata, con un pannello per unità e
+zoom/cursore comuni, vedi [la guida dedicata](call-chart.md). Diagnostica A/B
+mantiene i suoi controlli e le configurazioni salvabili.
+
 ## Missing packets
 
-`vd.missing_packets` è disponibile in chiamata singola, Confronta, Diagnostica A/B e App e xcoder. Mostra un punto isolato per messaggio NART con il conteggio esplicito `(N missing packets)`, asse in pacchetti separato da ms e percentuali. Il tooltip/CSV conserva file e riga del messaggio con i numeri di sequenza. Non è una misura di perdita definitiva: le segnalazioni possono sovrapporsi o precedere recupero/riordino. Nessun totale di pacchetti unici persi viene dedotto.
+`vd.missing_packets` è disponibile in chiamata singola, Confronta, Diagnostica A/B e App e xcoder. Mostra un punto isolato per messaggio NART con il conteggio esplicito `(N missing packets)`, asse in pacchetti separato da ms e percentuali, con tacche intere in chiamata/Confronta e Diagnostica A/B. Il tooltip/CSV conserva file e riga del messaggio con i numeri di sequenza. Non è una misura di perdita definitiva: le segnalazioni possono sovrapporsi o precedere recupero/riordino. Nessun totale di pacchetti unici persi viene dedotto.
 
 L’aggiornamento arricchisce gli eventi già importati una sola volta (marker `missing-packets-1:<import>`), senza ricreare altre metriche o cambiare schema. I record senza finestra di linea univoca rimangono non attribuiti e interrogabili via SQL. Per xcoder si mantiene l’assunzione di formato identico alle app, ancora da validare con campioni reali.
 
 ## Upstream e downstream rispetto all’app
 
-Il selettore della chiamata/Confronta raggruppa le metriche in Downstream (ricezione locale dell’app), Upstream (ricezione dichiarata dal peer/GW), Bidirezionale/combinati e Interpretazione da verificare. Jitter e perdita RTCP hanno due voci distinte che filtrano anche il CSV per incoming/outgoing. Gli identificativi tecnici nel database non cambiano. RTT e ping non sono assegnati a una singola direzione. Le metriche KPE non confermate restano nel gruppo da verificare.
+Il pannello Aggiungi metriche della chiamata/Confronta raggruppa le metriche in Downstream (ricezione locale dell’app), Upstream (ricezione dichiarata dal peer/GW), Bidirezionale/combinati e Interpretazione da verificare. Jitter e perdita RTCP hanno due voci distinte che filtrano anche il CSV per incoming/outgoing. Gli identificativi tecnici nel database non cambiano. RTT e ping non sono assegnati a una singola direzione. Le metriche KPE non confermate restano nel gruppo da verificare.
 
 In Diagnostica A/B e App e xcoder, legenda e tooltip indicano chi misura; il filtro Direzione delle curve limita curve e relativo tooltip. Gli episodi audio restano visibili come contesto separato. Il filtro è temporaneo e non modifica le metriche selezionate nelle analisi salvate né il JSON completo esportato.
 

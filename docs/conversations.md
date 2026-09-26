@@ -1,6 +1,6 @@
 # Android, iOS e conversazioni
 
-Importa gli ZIP con lo stesso pulsante **Importa log**, senza scegliere un parser
+Importa gli ZIP con lo stesso pulsante **Importa ZIP**, senza scegliere un parser
 Android o iOS. Le metriche sono riconosciute dal formato e dalle unità scritte nei
 log, non dal sistema operativo. Le rotazioni e i formati VD precedenti e nuovi
 possono convivere nello stesso archivio.

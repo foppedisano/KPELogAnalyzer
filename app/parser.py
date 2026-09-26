@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
 
-PARSER_VERSION = '1.8.0'
+PARSER_VERSION = '1.10.0'
 MAX_ZIP = 64 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 MAX_FILE = 40 * 1024 * 1024
@@ -82,6 +82,8 @@ def sip(text):
 
 def classify(name):
     base = PurePosixPath(name).name.lower()
+    if base.startswith('telemetry') and base.endswith('.jsonl'):
+        return 'telemetry'
     for prefix, kind in [('sip_debug', 'sip'), ('kpelog', 'kpe'), ('rtplog', 'rtcp'),
                          ('callinfo', 'callinfo'), ('phoneengine', 'phone'), ('vdlog', 'vd')]:
         if base.startswith(prefix):
@@ -161,7 +163,7 @@ def read_zip(data):
                 continue
             if info.flag_bits & 1 or info.file_size > MAX_FILE:
                 raise ValueError('File cifrato o oltre 40 MiB')
-            if not name.lower().endswith(('.txt', '.log', '.old')):
+            if not name.lower().endswith(('.txt', '.log', '.old')) and classify(name) != 'telemetry':
                 warnings.append(f'Ignorato file non testuale: {name}')
                 continue
             try:
@@ -193,6 +195,21 @@ def ingest(db, data, name, label=''):
             parser = classify(filename)
             fid = db.execute('INSERT INTO files(import_id,name,size,parser) VALUES(?,?,?,?)', (iid, filename, size, parser)).lastrowid
             rs = []
+            if parser == 'telemetry':
+                from .telemetry import records as telemetry_records
+                invalid = 0
+                for line_no, ts, body, event, errors in telemetry_records(text):
+                    invalid += bool(errors)
+                    rs.append(dict(file=fid, line_no=line_no, ts=ts, text=body, parser=parser,
+                                   line=None, level='', sip=None, telemetry=event, errors=errors))
+                if invalid:
+                    warnings.append(f'{filename}: {invalid} record di telemetria non conformi conservati; '
+                                    'verificare con python -m app.telemetry')
+                dated = [r['ts'] for r in rs if r['ts']]
+                db.execute('UPDATE files SET first_ts=?,last_ts=?,records=? WHERE id=?',
+                           (min(dated) if dated else None, max(dated) if dated else None, len(rs), fid))
+                all_records.extend(rs)
+                continue
             for line_no, ts, body in records(text):
                 level = LEVEL.search(body.split('\n', 1)[0])
                 lm = LINE.search(body.split('\n', 1)[0])
@@ -212,7 +229,7 @@ def ingest(db, data, name, label=''):
             signature = (r['parser'], r['ts'], hashlib.sha256(r['text'].encode()).digest())
             r['duplicate'] = signature in seen
             seen.add(signature)
-        ordered = sorted((r for r in all_records if r['ts'] and not r['duplicate']), key=lambda r: r['ts'])
+        ordered = sorted((r for r in all_records if r['ts'] and not r['duplicate'] and r['parser'] != 'telemetry'), key=lambda r: r['ts'])
         sip_calls = {}
         for r in ordered:
             s = r['sip']
@@ -298,6 +315,18 @@ def ingest(db, data, name, label=''):
             db.execute('UPDATE calls SET start=(SELECT MIN(start) FROM perspectives WHERE call_id=?),end=(SELECT MAX(end) FROM perspectives WHERE call_id=?),connected=(SELECT MIN(connected) FROM perspectives WHERE call_id=?) WHERE id=?', (call_id,call_id,call_id,call_id))
         counts = dict(metrics=0, unassigned_metrics=0, invalid_metrics=0)
         for r in all_records:
+            if r['parser'] == 'telemetry':
+                event = r['telemetry']
+                kind = 'telemetry.invalid'
+                leg = None
+                if not r['errors']:
+                    kind = 'telemetry.' + event['type'] + '.' + event['validity']
+                    cid = event['payload'].get('stream', {}).get('sip_call_id')
+                    leg = by_cid.get(cid) if cid else None
+                db.execute('INSERT INTO events(import_id,file_id,line_no,ts,level,kind,text,call_id,perspective_id) VALUES(?,?,?,?,?,?,?,?,?)',
+                           (iid,r['file'],r['line_no'],r['ts'],'',kind,r['text'],
+                            leg['call_id'] if leg else None,leg['pid'] if leg else None))
+                continue
             leg = by_cid.get(r['sip']['cid']) if r['sip'] else None
             if not leg:
                 explicit = re.search(r'^\s*Call-ID:\s*(\S+)', r['text'], re.M | re.I)
@@ -324,6 +353,12 @@ def ingest(db, data, name, label=''):
                     counts['invalid_metrics'] += not valid
         from .enrichment import enrich_import
         enrich_import(db, iid)
+        from .geography import enrich as enrich_geo
+        enrich_geo(db, iid)
+        from .mobility import enrich as enrich_mobility
+        enrich_mobility(db, iid)
+        from .telemetry_store import ingest as ingest_telemetry
+        ingest_telemetry(db, iid)
         totals = db.execute('''SELECT COUNT(*),COALESCE(SUM(m.call_id IS NULL),0),COALESCE(SUM(m.valid=0),0)
             FROM metrics m JOIN events e ON e.id=m.event_id WHERE e.import_id=?''', (iid,)).fetchone()
         counts.update(zip(('metrics', 'unassigned_metrics', 'invalid_metrics'), totals))
@@ -332,4 +367,5 @@ def ingest(db, data, name, label=''):
         if counts['invalid_metrics']:
             warnings.append(f"{counts['invalid_metrics']} valori anomali conservati, esclusi dai grafici per impostazione predefinita")
         db.execute('UPDATE imports SET file_count=?,event_count=?,warnings=? WHERE id=?', (len(files),len(all_records),json.dumps(warnings),iid))
-    return dict(id=iid, duplicate=False, calls=len({l['call_id'] for l in legs}), events=len(all_records), warnings=warnings, parser_version=PARSER_VERSION, **counts)
+    call_count = db.execute('SELECT count(*) FROM perspectives WHERE import_id=?', (iid,)).fetchone()[0]
+    return dict(id=iid, duplicate=False, calls=call_count, events=len(all_records), warnings=warnings, parser_version=PARSER_VERSION, **counts)

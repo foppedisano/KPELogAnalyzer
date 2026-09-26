@@ -60,6 +60,8 @@ def calculate(db, ids, perspective_id=None):
                     loss_percent=m['value'], evidence=evidence, model=MODEL,
                     interval_seconds=(end-begin).total_seconds()))
             previous = ts
+    from .telemetry_store import calculate as telemetry_calculate
+    out.extend(telemetry_calculate(db, ids, perspective_id))
     return sorted(out, key=lambda x:(x['ts'],x['id']))
 
 
@@ -80,6 +82,12 @@ def call_summary(db, call_id):
     except ValueError as error:
         result['reason'] = str(error)
         return result
+    roles = {v['role'] for v in values if v.get('clock_domain') == 'UTC'}
+    if roles == {'gw'}:
+        result['role_basis'] = 'telemetry_gw'
+        values = [dict(v,direction='outgoing' if v['direction']=='incoming' else 'incoming') for v in values]
+    elif roles == {'app'}:
+        result['role_basis'] = 'telemetry_app'
     result['reason'] = 'Nessun intervallo MOS valido'
     begin, end = p['connected'] or p['start'], p['end']
     duration = max(0, (datetime.fromisoformat(end)-datetime.fromisoformat(begin)).total_seconds()) if begin and end else None

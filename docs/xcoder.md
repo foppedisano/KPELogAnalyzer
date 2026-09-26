@@ -4,6 +4,17 @@ Una persona può avere due punti di osservazione della stessa telefonata:
 la propria app e il nodo transcoder (xcoder) del Kalliope GW. Non sono due
 partecipanti. Uno stesso server può produrre osservazioni di persone diverse.
 
+## Direzioni e MOS
+
+Per l'analisi MOS della stessa tratta, usare **MOS e ricezione** e scegliere
+esplicitamente il ricevitore opposto: il suo risultato locale viene riutilizzato.
+L'associazione app/xcoder qui non configura automaticamente quel selettore né
+il MOS del registro. Un xcoder può servire più tratte: il ruolo da solo non basta
+per invertire incoming/outgoing. [Metodo MOS](mos.md) e [direzioni](metric-reading.md).
+
+Il grafico multimetriche del dettaglio chiamata ha controlli distinti dal
+confronto multicomponente: [aggiunta, rimozione e scale](call-chart.md).
+
 ## Procedura
 
 1. Importa separatamente i log set delle app e degli xcoder con **Importa ZIP**.

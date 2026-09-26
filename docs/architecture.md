@@ -1,6 +1,81 @@
-# Architecture and parser contract
+# Architettura e contratto dei parser
 
-## Data model (schema version 5)
+[Indice](README.md) · [Guida alla logica della piattaforma](platform-guide.md)
+
+## Quadro attuale
+
+Un processo HTTP Python serve API e interfaccia statica. SQLite in modalità WAL
+conserva dati ed evidenze; gli import sono serializzati e atomici per archivio.
+Il frontend è JavaScript senza dipendenze o CDN. Il servizio resta sul loopback.
+L'unica cartografia remota opzionale è richiesta esplicitamente dall'utente;
+la base offline è inclusa.
+
+### Due percorsi di elaborazione
+
+| Fase | Log tradizionali | Telemetria strutturata |
+|---|---|---|
+| Identità evento | Evidenza testuale e chiavi degli estrattori per import | source_id/event_id stabili fra export |
+| Tempo | Timestamp osservato, nessun fuso inventato | UTC e dominio monotono sessione/boot |
+| Attribuzione | Call-ID esatto o finestra di linea univoca | SIP Call-ID esplicito; riferimenti nello stesso dominio sorgente/sessione/boot |
+| Perdita/MOS | Report RTCP, mantenimento MOS con scadenza | Finestre RTP verificate o delta RTCP compatibili |
+| Posizione | Nuovo aggiornamento o dichiarazione SIP locale ammessa | Fix app già consegnato, non cached, età verificabile |
+| Geografia | Associazione con limite di 120 s dalla consegna legacy | Associazione monotona con limite di 30 s dal fix |
+
+I due percorsi condividono il modello numerico MOS e la vista geografica, ma non
+si deduplicano genericamente fra loro. Gli input originali restano archiviati.
+Le derivazioni sono escluse quando mancano unità, identità o riferimenti affidabili.
+
+### Cosa viene salvato e cosa si ricalcola
+
+- File/eventi/metriche estratte: persistiti con provenienza.
+- Delta e somme diagnostiche, episodi e MOS ordinario: calcolati su richiesta.
+- Posizioni, osservazioni posizione–MOS e contesto: persistiti con metodo/versione;
+  le celle sono aggregazioni ricalcolate per filtro e dimensione.
+- Telemetria canonica e perdita su intervallo verificato: persistite. Un conflitto
+  può rimuovere e ricostruire i prodotti dipendenti; gli ID delle derivazioni non
+  sono identità stabili degli eventi grezzi.
+- Analisi salvate: configurazioni revisionate, non fotografie immutabili dei dati.
+- Piani offline: eventi archiviati per audit, senza motore di previsione/esecuzione.
+
+### Tabelle delle estensioni
+
+| Tabelle | Responsabilità |
+|---|---|
+| saved_analyses, source_identities, window_revisions | Configurazioni, identità confermate e cronologia finestre manuali |
+| observation_roles | Associazione esplicita sessione/partecipante/componente |
+| source_profiles, call_correlations, leg_outcomes | Metadati export, correlazioni UUID e risposte su altre tratte |
+| geo_positions, geo_mos, geo_mos_evidence | Posizioni, intervalli georeferenziati e prove separate |
+| network_observations, movement_sequences, movement_samples | Contesto rete e sequenze locali senza identificazione del viaggio |
+| telemetry_records, telemetry_evidence | Eventi canonici e tutte le copie originali |
+| telemetry_intervals, telemetry_geo_context | Finestre verificate e contesto delle osservazioni strutturate |
+| meta | Versione schema e marker idempotenti di elaborazione |
+
+### Migrazioni
+
+Lo schema corrente è **8**. Le migrazioni successive preservano ID grezzi e
+annotazioni. Su DB popolati producono backup consistenti pre-vN; un backup
+omonimo non viene sovrascritto. Servono spazio per backup e arricchimenti.
+Le istruzioni sotto sulle singole versioni descrivono la storia dello schema;
+non vanno interpretate come versioni alternative oggi supportate dal frontend.
+
+| Passaggio | Aggiunta |
+|---|---|
+| 1→2 | Provenienza metrica, device, unità grezze, tipi e versioni app |
+| 2→3 | Analisi salvate, identità confermate, modifiche finestre auditate |
+| 3→4 | Ruoli e associazioni app/xcoder |
+| 4→5 | Metadati piattaforma, UUID conversazioni, esiti delle tratte |
+| 5→6 | Archivio geografico posizione–MOS |
+| 6→7 | Rete e sequenze di movimento |
+| 7→8 | Archivio canonico telemetria e intervalli verificati |
+
+Prima di aggiornare: **Esporta database**, conserva la copia localmente,
+ricostruisci il container e controlla `/api/health`. Per rollback usa una nuova
+cartella o un nuovo volume con il backup e il codice compatibile: mai sovrascrivere
+un DB aperto. [Procedura operativa](getting-started.md).
+
+## Riferimento tecnico dettagliato
+
+## Modello base dei dati (schema 8)
 
 | Table | Meaning | Relations |
 |---|---|---|
@@ -16,10 +91,10 @@
 
 `metrics` also carries direction, flow, SSRC, unit and validity. Keep `sample`, `last`, `avg`, `min`, `max` distinct. The same metric name in incoming/outgoing directions represents different measurements. KPE's “first media flow” is represented as flow `0`; this is not a reconstruction of every negotiated media stream.
 
-## Import pipeline
+## Pipeline di importazione legacy
 
 1. Hash the archive. If already imported, return the existing ID without changing labels or data.
-2. Validate size, member count, paths, encryption and per-member size. Read `.txt`, `.log`, `.old`; other entries receive an import warning.
+2. Validate size, member count, paths, encryption and per-member size. Read `.txt`, `.log`, `.old` and recognized `telemetry*.jsonl`; other entries receive an import warning. Structured JSONL follows its own per-record validation path.
 3. Normalize CRLF/CRCRLF and split timestamped multiline records. Both KPE/iOS and reSIProcate timestamps are recognized. Preserve leading un-timestamped fragments unassigned.
 4. Collect SIP dialogs from `sip_debug*`: INVITE, ACK, BYE, CANCEL, REFER, PRACK, UPDATE. REGISTER/OPTIONS/NOTIFY do not become calls. SIP auth challenges are not terminal failures.
 5. Reconstruct line windows from `kpelog*` additions, state transitions, removals, and terminated-call JSON summaries. Process rotations in timestamp order. A repeated exact record does not create new derived observations.
@@ -27,7 +102,7 @@
 7. Store calls and per-import perspectives. Attach events by exact Call-ID or a unique source-local line window. A 250 ms post-termination tolerance accommodates delayed final statistics; ambiguous overlapping boundaries remain unassigned. Unscoped `CallInfo` context uses a unique bounded call window. Other unscoped events remain unassigned.
 8. Extract numeric metric observations; keep unassigned observations in the DB. Generate coverage/invalid-value warnings and commit the archive atomically.
 
-## Supported extractors
+## Estrattori supportati
 
 | Input | Extraction |
 |---|---|
@@ -37,15 +112,16 @@
 | `rtplog*.txt` | RTCP receive/remote loss, jitter, RTT, received packet counter, SSRC, flow |
 | `VDlog*.txt` | NART device sections, buffer occupancy/target, skipped silence, delay maxima |
 | `PhoneEngine*.log` | timestamped events, explicit `lineId` context, app-version markers |
+| `telemetry*.jsonl` | v1/v1.1 validation, canonical records, chronology/references and verified interval derivation |
 | other text logs including `resip*` | searchable multiline raw events; exact Call-ID association when available |
 
-## Deliberate limits
+## Limiti di attribuzione
 
 The parser is empirical, based on an iOS export, not on the full proprietary KPE specification. No RTP packet capture decoding, measured perceptual MOS, Android format guarantees, automatic conference graph, SDP negotiation state machine, NAT root-cause diagnosis, or audio reconstruction. SIP forking is represented at Call-ID level, not separate From/To-tag dialogs. SIP 2xx evidence on re-INVITE may be the first observed connection when the initial dialog is truncated. Line windows cannot be recovered reliably from RTP timestamps alone.
 
 A ZIP is a source snapshot, not a permanently identified device. Two snapshots of one device can duplicate observations across imports; the UI separates these series. Within a source a given Call-ID has one perspective; highly unusual Call-ID reuse or multiple line assignments for one Call-ID require a richer schema. Global call timestamps aggregate raw per-source timestamps; durations are not clock-corrected. Partial windows closed by line reuse are labelled incomplete.
 
-## Adding a format
+## Aggiungere un formato
 
 Add a synthetic sample in `tests/fixtures.py` or an additional fixture module, characterize timestamps and identifiers, then add classification/extraction code. Retain provenance. Document units and source evidence explicitly. Add regression tests for absent IDs, malformed JSON, rotations and simultaneous calls. Use real private archives only for local verification, with aggregate reports kept out of public fixtures.
 
@@ -94,5 +170,29 @@ See [the user guide](conversations.md) for Android coverage and interpretation.
 ## Fixed-reference loss score
 
 `app/mos.py` computes bounded, on-demand step intervals from RTCP loss.
-No schema changes or persisted scores. Explicit peer selection reuses the peer
+Ordinary MOS responses are calculated on demand, while geography persists versioned scores and structured telemetry persists input intervals. Explicit peer selection reuses the peer
 local result without mixing evidence or changing call identities. See [MOS](mos.md).
+
+## Schema 6: geographic observations
+
+Version 5→6 backs up the populated database before adding geo_positions, geo_mos
+and geo_mos_evidence. Import-time derivation and historical backfill preserve
+source evidence and use versioned markers. Aggregation is independent of stored
+observations. See [geography](geography.md) for association, deduplication, bounds,
+optional tile cache and recovery instructions. Ordinary MOS charts remain
+on-demand; only geographic observations persist their model version and inputs.
+
+## Schema 7: movement and network context
+
+Version 6→7 preserves geography and adds network_observations, movement_sequences
+and movement_samples with evidence links. Backfill is versioned and idempotent.
+[Method, limitations and backup](mobility.md). No prediction is exposed yet.
+
+## Structured telemetry v1/v1.1 and schema 8
+
+`app/telemetry.py` validates the producer contract. `app/telemetry_store.py` stores
+canonical source/event identities and all raw evidence, validates chronology and
+references, and derives explicit interval loss/MOS plus geographic associations.
+Conflicting stable IDs retract dependent products. Legacy extractors remain separate.
+Schema 8 adds telemetry_records, telemetry_evidence, telemetry_intervals and
+telemetry_geo_context with a pre-upgrade backup. See [rules, bounds and upgrade](telemetry-integration.md).

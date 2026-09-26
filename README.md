@@ -12,6 +12,17 @@ docker compose up --build -d
 
 Apri http://127.0.0.1:8080/. Repository pubblico **senza licenza concessa per ora**: non è concessa una licenza generale di riuso, modifica o redistribuzione.
 
+## Documentazione e primo percorso
+
+Inizia da [come funziona la piattaforma](docs/platform-guide.md) e da
+[capire le metriche](docs/metric-reading.md). L’[indice completo](docs/README.md)
+separa guide operative, metodo MOS, mappa, API e contratto per gli sviluppatori app/GW.
+
+1. Importa gli ZIP e controlla **Sorgenti e copertura**, incluse chiamate distinte, nuove e già presenti.
+2. Ordina il registro per MOS medio/minimo e apri una chiamata.
+3. Il dettaglio parte dal MOS downstream: **Aggiungi metriche** sovrappone i parametri scelti.
+4. Verifica le evidenze, confronta i ricevitori e consulta la mappa dove esistono posizioni utilizzabili.
+
 ## Android e conversazioni
 
 Gli ZIP iOS e Android osservati usano lo stesso flusso di importazione. La vista **Conversazioni** collega le tratte tramite X-Call-UUID quando presente, mantiene visibili esiti e prove, e permette il confronto di app e gateway. [Guida, criteri e limiti](docs/conversations.md).
@@ -45,6 +56,15 @@ I dati persistono nel volume `kpe-data`, anche dopo `down`. Per una porta divers
 - Raggruppare più tratte in una conversazione/conferenza e indicare l'app host con una nota di evidenza.
 - Eseguire SQL in sola lettura ed esportare una fotografia consistente del database.
 
+## Grafici della chiamata e del confronto
+
+[Aggiungi metriche](docs/call-chart.md) permette selezione multipla e ricerca,
+con scorciatoie Qualità, Rete e Ricezione. RTT e jitter condividono il pannello ms;
+unità diverse usano pannelli con tempo, cursore e zoom sincronizzati. Le metriche
+raw restano separate. Le tacche dei conteggi di pacchetti sono intere; MOS usa
+la scala 1–5. La × rimuove una metrica, la legenda nasconde una singola serie.
+CSV e statistica last/avg/min/max rimangono specifici della metrica.
+
 ## Diagnostica e guida alle metriche
 
 La vista **Diagnostica A/B** sovrappone RTT, massimo ritardo di arrivo NART, target dejitter, audio nel buffer e silenzio saltato. Include selezione di metriche (anche jitter e perdita), assi per unità, legenda con colori/simboli personalizzabili, tooltip condiviso, delta dei contatori e due somme distinte dei buffer con evidenze. Le fasce temporali mostrano anche underrun e media missing con durata, stato ed evidenze. Puoi salvare e riaprire configurazioni complete, correggere finestre manuali e confermare identità locali proposte con evidenze SIP. Supporta i formati VD/RTP vecchi e nuovi riconosciuti, anche nello stesso archivio; le versioni dell’app sono mostrate quando esiste un marker esplicito.
@@ -53,10 +73,26 @@ Per VDlog/rtplog sciolti usa **File e finestre manuali**. Per capire ogni parame
 
 ## MOS a profilo fisso
 
-La vista **MOS e ricezione** mostra due stime a gradini basate sulla perdita RTCP,
-con codec e PLC di riferimento costanti. Selezionando il GW della tratta, la sua
+La vista **MOS e ricezione** mostra due stime basate sulla perdita RTCP o su finestre di telemetria verificate,
+con codec e PLC di riferimento costanti. È un indice della componente di perdita,
+non una misura completa della rete o della qualità percepita. Selezionando il GW della tratta, la sua
 ricezione locale è riutilizzata come upstream dell’app. Silenzio saltato e missing
 packets restano evidenze separate. [Metodo, limiti e API](docs/mos.md).
+
+## Mappa qualità
+
+La **Mappa qualità** associa posizioni locali e intervalli MOS, con zoom, celle
+regolabili e time machine. Conserva le osservazioni nel DB; aggrega per periodo
+senza mostrare identità. Base offline e strade OSM opzionali.
+[Metodo e limiti](docs/geography.md). Filtri di rete e sequenze temporali
+preparano le analisi future: [contesto e upgrade schema 7](docs/mobility.md).
+
+## Telemetria per le prossime versioni di app e GW
+
+[Contratto di raccolta v1](docs/telemetry.md): tempi, posizione, rete, media,
+configurazioni e interventi. Include esempi sintetici, validatore senza dipendenze
+(`python -m app.telemetry file.jsonl`) e importazione di `telemetry*.jsonl` negli ZIP.
+La [revisione 1.1 e lo schema DB 8](docs/telemetry-integration.md) aggiungono deduplicazione, audit dei piani offline e integrazione in MOS/mappa quando le semantiche sono verificate.
 
 ## App e xcoder
 
@@ -78,7 +114,7 @@ Più ZIP con lo stesso Call-ID condividono la chiamata e conservano metriche e s
 - I report RTCP dichiarano `ms`, `%` e conteggi. Valori negativi o percentuali fuori 0–100 restano nel DB con `valid=0` e sono esclusi dai grafici per default.
 - Le metriche JSON KPE, tranne i contatori di pacchetti, hanno unità **raw**: non vengono convertite senza documentazione del produttore. Non confrontare numericamente RTT `raw` e RTT `ms` come se fossero equivalenti.
 - Il ping è relativo all'endpoint ICMP scritto nei log, non necessariamente al peer RTP. `N/A`, NaN e infinito non sono trasformati in zero.
-- La media mostrata è la media aritmetica dei campioni selezionati, non una stima MOS né una media pesata nel tempo. Il CSV contiene tutti i campioni selezionati, anche delle serie nascoste o fuori dallo zoom.
+- Nel registro il MOS medio è pesato sulla durata degli intervalli coperti; minimo, massimo e copertura sono separati. Le statistiche dei campioni nel grafico sono invece aritmetiche, per serie. Il CSV di ciascuna metrica include anche serie nascoste e punti fuori dallo zoom.
 - Le linee dei grafici si interrompono su intervalli oltre 30 secondi. Controlla i singoli campioni e la copertura dei file.
 - I file non interpretati vengono conservati come eventi ricercabili (`raw`). Il supporto iniziale deriva da un export iOS KPE; altri formati/versioni possono richiedere nuovi parser.
 
@@ -106,7 +142,7 @@ Il generatore demo contiene solo identità sintetiche `example.test`: i due ZIP 
 
 ## Dati, limiti e backup
 
-Lo ZIP viene letto in memoria e non estratto sul filesystem. Limiti: **64 MiB ZIP**, **256 MiB decompressi**, **40 MiB/file**, **200 elementi**. Importazione sincrona e atomica per archivio; nell'upload multiplo un errore non annulla gli archivi già riusciti. La UI elenca al massimo 2.000 chiamate; SQL consente di interrogare l'intero DB. Grafici/CSV: massimo 100.000 campioni per selezione, con errore esplicito oltre il limite. SQL: massimo 1.000 righe, 3 secondi e 4 MiB per risultato.
+Lo ZIP viene letto in memoria e non estratto sul filesystem. Limiti: **64 MiB ZIP**, **256 MiB decompressi**, **40 MiB/file**, **200 elementi**. Importazione sincrona e atomica per archivio; nell'upload multiplo un errore non annulla gli archivi già riusciti. La UI elenca al massimo 2.000 chiamate; SQL consente di interrogare l'intero DB. Grafici/CSV: massimo 100.000 campioni per richiesta di metrica, con errore esplicito oltre il limite. SQL: massimo 1.000 righe, 3 secondi e 4 MiB per risultato.
 
 Il contenuto testuale è conservato in UTF-8 con newline normalizzati; `file:linea` si riferisce a questo testo. Caratteri non UTF-8 vengono sostituiti con avviso. Conserva lo ZIP originale se serve una copia byte-per-byte. Gli eventi duplicati nelle rotazioni restano consultabili, mentre le metriche identiche dello stesso parser vengono contate una sola volta nello stesso archivio. Due export diversi dello stesso dispositivo rimangono due prospettive: non sommare i loro contatori come se fossero dispositivi distinti.
 
@@ -122,6 +158,11 @@ app/db.py           schema SQLite, migrazione e backup
 app/enrichment.py   VD/NART, RTT legacy e marker versione
 app/diagnostics.py  allineamento, derivazioni e picchi con evidenze
 app/catalog.py      dizionario condiviso UI/API/documentazione
+app/mos.py          MOS a profilo fisso e riepiloghi temporali
+app/geography.py    associazione posizione–MOS e aggregazione in celle
+app/mobility.py     contesto di rete e sequenze locali
+app/telemetry.py    contratto e validatore app/GW
+app/telemetry_store.py  deduplicazione, controlli e derivazioni strutturate
 app/manual.py       file testuali e finestre dichiarate
 app/server.py       API HTTP, frontend statico, query read-only
 app/cli.py          import/query/serve per agenti e automazioni
@@ -134,4 +175,6 @@ AGENTS.md           istruzioni operative per coding agent
 
 Vedi [architettura e parser](docs/architecture.md), [API](docs/api.md) e [guida per gli agenti](AGENTS.md). Il repository non include log reali né un SDK proprietario. Non è un prodotto ufficiale Kalliope.
 
-Il [rapporto di verifica iniziale](docs/validation.md) distingue i controlli eseguiti dai limiti ancora da validare.
+Il [registro delle verifiche](docs/validation.md) distingue controlli recenti e storici.
+I [limiti aperti](docs/open-issues.md) includono validazione GW, dati geografici,
+scalabilità e algoritmi predittivi ancora da implementare.

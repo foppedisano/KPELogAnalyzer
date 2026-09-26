@@ -58,7 +58,7 @@ def enrich_import(db, iid):
     seen = set()
     added = 0
     for row in db.execute('''SELECT e.*, f.name filename FROM events e JOIN files f ON f.id=e.file_id
-        WHERE e.import_id=? AND e.ts IS NOT NULL AND (lower(f.name) LIKE '%vdlog%' OR lower(f.name) LIKE '%rtplog%' OR lower(f.name) LIKE '%phoneengine%') ORDER BY e.ts,e.id''', (iid,)):
+        WHERE e.import_id=? AND e.ts IS NOT NULL AND f.parser!='telemetry' AND (lower(f.name) LIKE '%vdlog%' OR lower(f.name) LIKE '%rtplog%' OR lower(f.name) LIKE '%phoneengine%') ORDER BY e.ts,e.id''', (iid,)):
         e = dict(row)
         version = re.search(r'KPE setAppInfo configured with name=([^,\n]+), version=([^\s,]+)', e['text'])
         if version:

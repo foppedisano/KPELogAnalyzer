@@ -100,6 +100,7 @@ async function render() {
   const views = {
     calls: renderCalls,
     mos: renderMos,
+    geography: renderGeography,
     compare: renderCompare,
     sources: renderSources,
     logs: renderLogs,
@@ -124,7 +125,7 @@ function mosCell(c, direction) {
   const color = v => v < 3 ? 'mos-low' : v < 4 ? 'mos-mid' : 'mos-good';
   const coverage = m.coverage_percent == null ? 'durata totale non nota' : `${number(m.coverage_percent)}% della finestra osservata`;
   const tip = source + `${m.basis === 'local' ? 'Ricezione locale' : 'Report remoto RTCP'}; ${summary.role_basis === 'app_assumed' ? 'app presunta' : 'app confermata'}. Media pesata su ${number(m.covered_seconds)} s; ${coverage}. Minimo: evento #${m.minimum_event_id}; massimo: evento #${m.maximum_event_id}.`;
-  return `<td class="mos-cell" title="${esc(tip)}"><strong class="${color(m.minimum)}">${number(m.minimum)}</strong> <small>min</small><div><span class="${color(m.mean)}">${number(m.mean)}</span> <small>media</small> · <span class="${color(m.maximum)}">${number(m.maximum)}</span> <small>max</small></div><small>cop. ${m.coverage_percent == null ? '—' : number(m.coverage_percent)+'%'}</small></td>`;
+  return `<td class="mos-cell" title="${esc(tip)}"><strong class="${color(m.mean)}">${number(m.mean)}</strong> <small>media</small><div><span class="${color(m.minimum)}">${number(m.minimum)}</span> <small>min</small> · <span class="${color(m.maximum)}">${number(m.maximum)}</span> <small>max</small></div><small>cop. ${m.coverage_percent == null ? '—' : number(m.coverage_percent)+'%'}</small></td>`;
 }
 function callSortValue(c, key) {
   if (key.startsWith('mos.')) { const [, direction, stat] = key.split('.'); return c.mos?.[direction]?.[stat] ?? null; }
@@ -164,7 +165,7 @@ function renderCalls(page) {
       `<span class="tag">● Workspace privato</span>`,
     ) +
     stats() +
-    `<div class="panel"><div class="panel-head"><h2>Registro chiamate</h2><div class="toolbar"><input id="call-search" aria-label="Cerca chiamate" placeholder="Cerca interlocutore o Call-ID…"><button id="compare-selected">Confronta selezionate →</button></div></div><div class="call-sort toolbar"><label>Ordina per <select id="call-sort"><option value="start">Data</option><option value="duration">Durata connessa</option><option value="status">Stato osservato</option><option value="metrics">Numero metriche</option>${['downstream','upstream'].map(d=>['minimum','mean','maximum'].map((v,i)=>`<option value="mos.${d}.${v}">MOS ${d} · ${['minimo','medio','massimo'][i]}</option>`).join('')).join('')}</select></label><label>Ordine <select id="call-order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label><span class="muted">MOS: minimo in evidenza · media pesata · copertura temporale</span></div><div id="call-list"></div><div class="table-note">Orari originali dei log, senza fuso dichiarato. Seleziona più righe per confrontare chiamate o partecipanti. Massimo 2.000 chiamate elencate; ordinamento su queste righe. MOS a profilo fisso, sola perdita RTCP: rosso &lt;3, arancio 3–4, verde ≥4 (soglie indicative). Prospettiva dell’ultimo import, senza unire export o flussi; sorgente nel tooltip. Dati mancanti in fondo.</div></div>`;
+    `<div class="panel"><div class="panel-head"><h2>Registro chiamate</h2><div class="toolbar"><input id="call-search" aria-label="Cerca chiamate" placeholder="Cerca interlocutore o Call-ID…"><button id="compare-selected">Confronta selezionate →</button></div></div><div class="call-sort toolbar"><label>Ordina per <select id="call-sort"><option value="start">Data</option><option value="duration">Durata connessa</option><option value="status">Stato osservato</option><option value="metrics">Numero metriche</option>${['downstream','upstream'].map(d=>['minimum','mean','maximum'].map((v,i)=>`<option value="mos.${d}.${v}">MOS ${d} · ${['minimo','medio','massimo'][i]}</option>`).join('')).join('')}</select></label><label>Ordine <select id="call-order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label><span class="muted">MOS: media pesata in evidenza · minimo e massimo · copertura temporale</span></div><div id="call-list"></div><div class="table-note">Orari originali dei log, senza fuso dichiarato. Seleziona più righe per confrontare chiamate o partecipanti. Massimo 2.000 chiamate elencate; ordinamento su queste righe. MOS a profilo fisso, sola perdita RTCP: rosso &lt;3, arancio 3–4, verde ≥4 (soglie indicative). Prospettiva dell’ultimo import, senza unire export o flussi; sorgente nel tooltip. Dati mancanti in fondo.</div></div>`;
   function list() {
     const text = $("#call-search").value.toLowerCase();
     const calls = state.calls.filter((c) =>
@@ -214,7 +215,7 @@ async function detail(id) {
       "Segnalazione, statistiche e contesto della sessione.",
       `<button id="select-detail">${state.selected.has(id) ? "Rimuovi dal confronto" : "Aggiungi al confronto"}</button>`,
     ) +
-    `<div class="detail-meta"><div><span>PRIMA EVIDENZA</span><strong>${stamp(c.start)}</strong></div><div><span>CONNESSIONE</span><strong>${stamp(c.connected)}</strong></div><div><span>ULTIMA TERMINAZIONE</span><strong>${stamp(c.end)}</strong></div><div><span>DURATA CONNESSA*</span><strong>${duration(c)}</strong></div></div><p class="mono muted">Call-ID: ${esc(c.sip_call_id || "Non disponibile · sessione locale")}</p><p class="muted">* Intervallo osservato; con più sorgenti non corregge eventuali differenze tra gli orologi.</p><div class="panel"><div class="panel-head"><h2>Punti di vista</h2><span class="tag neutral">${ps.length} sorgenti</span></div>${ps.map((p) => `<div class="perspective"><strong>${esc(p.label)} <span class="tag neutral">${esc(p.direction)}</span> <span class="tag">${esc(p.status)}</span></strong><small>${esc(sourceDescription(p))}</small><small>App ${esc(p.app_version || "versione non documentata")} ${p.version_event_id ? "(evento " + p.version_event_id + ")" : ""} · Linea ${p.line_id ?? "non nota"} · ${esc(p.evidence)} · offset grafico ${p.clock_offset}s</small><small>${stamp(p.start)} → ${stamp(p.end)}</small></div>`).join("")}</div><button id="open-mos">MOS e ricezione di questa chiamata →</button><div id="analysis-panel"></div><div id="chart-panel"></div><div id="detail-events"></div>`;
+    `<div id="chart-panel"></div><div class="detail-meta"><div><span>PRIMA EVIDENZA</span><strong>${stamp(c.start)}</strong></div><div><span>CONNESSIONE</span><strong>${stamp(c.connected)}</strong></div><div><span>ULTIMA TERMINAZIONE</span><strong>${stamp(c.end)}</strong></div><div><span>DURATA CONNESSA*</span><strong>${duration(c)}</strong></div></div><p class="mono muted">Call-ID: ${esc(c.sip_call_id || "Non disponibile · sessione locale")}</p><p class="muted">* Intervallo osservato; con più sorgenti non corregge eventuali differenze tra gli orologi.</p><div class="panel"><div class="panel-head"><h2>Punti di vista</h2><span class="tag neutral">${ps.length} sorgenti</span></div>${ps.map((p) => `<div class="perspective"><strong>${esc(p.label)} <span class="tag neutral">${esc(p.direction)}</span> <span class="tag">${esc(p.status)}</span></strong><small>${esc(sourceDescription(p))}</small><small>App ${esc(p.app_version || "versione non documentata")} ${p.version_event_id ? "(evento " + p.version_event_id + ")" : ""} · Linea ${p.line_id ?? "non nota"} · ${esc(p.evidence)} · offset grafico ${p.clock_offset}s</small><small>${stamp(p.start)} → ${stamp(p.end)}</small></div>`).join("")}</div><button id="open-mos">MOS e ricezione di questa chiamata →</button><div id="analysis-panel"></div><div id="detail-events"></div>`;
   $("#back-calls").onclick = safe(() => setView("calls"));
   $("#select-detail").onclick = () => {
     state.selected.has(id) ? state.selected.delete(id) : state.selected.add(id);
@@ -224,7 +225,7 @@ async function detail(id) {
       : "Aggiungi al confronto";
   };
   $("#open-mos").onclick = safe(() => { window.mosLocal = ps[0]?.id; return setView("mos"); });
-  await mountChart($("#chart-panel"), [id]);
+  await mountChart($("#chart-panel"), [id], "derived.mos_reference|incoming");
   await mountAnalysis($("#analysis-panel"), id);
   await mountEvents($("#detail-events"), { call: id }, true);
 }
@@ -262,287 +263,8 @@ const colors = [
   "#dd6b52",
   "#397e9c",
 ];
-async function mountChart(root, ids) {
-  if (!root) return;
-  root.innerHTML = `<div class="panel"><div class="panel-head"><h2>Andamento delle metriche</h2><a id="csv-link" class="small-button">↓ CSV</a></div><div class="panel-body"><div class="chart-controls"><label>Parametro<select id="metric-name"></select></label><label>Statistica<select id="metric-stat"></select></label><label>Allineamento<select id="chart-axis"><option value="relative">Tempo dalla prima evidenza</option><option value="absolute">Orario log + correzione</option></select></label><label class="check"><input type="checkbox" id="include-invalid"> Mostra anomali</label></div><p class="muted" id="unit-note"></p><div class="chart-area"><canvas id="chart" aria-label="Grafico temporale delle metriche" role="img"></canvas><div class="chart-tooltip" hidden></div></div><div id="chart-legend" class="legend"></div><div class="toolbar"><button class="small-button" id="reset-zoom">Ripristina zoom</button><small>Rotella per ingrandire · passa sui campioni per leggere il valore</small></div><div id="metric-summary" class="metric-summary"></div><div id="metric-episodes"></div><p class="muted">Le somme A+B richiedono due sorgenti esplicite: usa Diagnostica A/B. Le voci del catalogo senza campioni restano selezionabili.</p></div></div>`;
-  const options=await api('metric-options?calls='+ids.join(','));
-  if(!root.isConnected)return;
-  const groups=['downstream','upstream','bidirectional','local','peer','unknown'].map(k=>options.find(o=>o.category===k)?.group).filter(Boolean);
-  $('#metric-name',root).innerHTML=groups.map(group=>`<optgroup label="${esc(group)}">${options.filter(o=>o.group===group).map(o=>`<option value="${esc(o.value)}">${esc(o.title)} [${esc(o.name)}]</option>`).join('')}</optgroup>`).join('');
-  if(options.some(o=>o.value==='rtcp.rtt')) $('#metric-name',root).value='rtcp.rtt';
-  const selectedMetric=()=>$('#metric-name',root).value.split('|')[0];
-  let request = 0,
-    points = [],
-    hidden = new Set(),
-    zoom = null;
-  const canvas = $("#chart", root),
-    tooltip = $(".chart-tooltip", root);
-  let drawn = [],
-    bounds = null;
-  function statsOptions() {
-    const n = selectedMetric();
-    $("#metric-stat", root).innerHTML = state.metrics
-      .filter((m) => m.name === n)
-      .map((m) => `<option>${esc(m.statistic)}</option>`)
-      .join("");
-    if (state.metrics.some((m) => m.name === n && m.statistic === "last"))
-      $("#metric-stat", root).value = "last";
-  }
-  function seriesKey(p) {
-    return `#${p.call_id} · P${p.perspective_id} · ${p.label} · ${p.measurement_context?.label||p.direction} · flusso ${p.flow}${p.ssrc ? " · " + p.ssrc : ""}${p.device ? " · " + p.device : ""} · ${p.sample_kind}${p.observer ? " · " + p.observer : ""}`;
-  }
-  function series() {
-    const groups = new Map();
-    for (const p of points) {
-      const key = seriesKey(p);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(p);
-    }
-    return [...groups.entries()];
-  }
-  function draw() {
-    if (!canvas.isConnected) return;
-    const rect = canvas.getBoundingClientRect(),
-      w = rect.width,
-      h = rect.height,
-      dpr = window.devicePixelRatio || 1;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    const ctx = canvas.getContext("2d");
-    ctx.scale(dpr, dpr);
-    const left = 65,
-      right = w - 18,
-      top = 24,
-      bottom = h - 38;
-    ctx.font = "10px Segoe UI";
-    ctx.fillStyle = "#82929f";
-    drawn = [];
-    const absolute = $("#chart-axis", root).value === "absolute";
-    const groups = series();
-    const visible = groups.filter(([k]) => !hidden.has(k));
-    let all = visible.flatMap(([, ps]) =>
-      ps.map((p) => ({
-        ...p,
-        x: absolute
-          ? timeValue(p.ts) + p.clock_offset * 1000
-          : timeValue(p.ts) - timeValue(p.start),
-      })),
-    );
-    if (!all.length) {
-      ctx.textAlign = "center";
-      ctx.fillText(
-        "Nessun campione disponibile per questa selezione",
-        w / 2,
-        h / 2,
-      );
-      bounds = null;
-      return;
-    }
-    let xmin = Infinity,
-      xmax = -Infinity;
-    for (const p of all) {
-      xmin = Math.min(xmin, p.x);
-      xmax = Math.max(xmax, p.valid_until ? p.x + timeValue(p.valid_until) - timeValue(p.ts) : p.x);
-    }
-    if (xmin === xmax) xmax = xmin + 1000;
-    if (zoom) {
-      [xmin, xmax] = zoom;
-    }
-    all = all.filter((p) => (p.x >= xmin || (p.valid_until && p.x + timeValue(p.valid_until) - timeValue(p.ts) > xmin)) && p.x <= xmax);
-    let ymin = 0,
-      ymax = 0;
-    for (const p of all) {
-      ymin = Math.min(ymin, p.value);
-      ymax = Math.max(ymax, p.value);
-    }
-    if (ymin === ymax) ymax = ymin + 1;
-    ymax += (ymax - ymin) * 0.1;
-    const sx = (x) => left + ((x - xmin) / (xmax - xmin)) * (right - left),
-      sy = (y) => bottom - ((y - ymin) / (ymax - ymin)) * (bottom - top);
-    bounds = { xmin, xmax, left, right };
-    for (let i = 0; i <= 4; i++) {
-      const y = top + ((bottom - top) * i) / 4;
-      ctx.strokeStyle = "#eaf0f3";
-      ctx.beginPath();
-      ctx.moveTo(left, y);
-      ctx.lineTo(right, y);
-      ctx.stroke();
-      ctx.textAlign = "right";
-      ctx.fillStyle = "#82929f";
-      ctx.fillText(number(ymax - ((ymax - ymin) * i) / 4), left - 10, y + 3);
-    }
-    for (let i = 0; i <= 4; i++) {
-      const value = xmin + ((xmax - xmin) * i) / 4;
-      ctx.textAlign = "center";
-      ctx.fillText(
-        absolute
-          ? new Date(value).toISOString().slice(11, 19)
-          : number(value / 1000) + " s",
-        sx(value),
-        h - 12,
-      );
-    }
-    groups.forEach(([key, ps], idx) => {
-      if (hidden.has(key)) return;
-      ctx.strokeStyle = colors[idx % colors.length];
-      ctx.fillStyle = colors[idx % colors.length];
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      let last = null;
-      for (const p of ps) {
-        const x = absolute
-          ? timeValue(p.ts) + p.clock_offset * 1000
-          : timeValue(p.ts) - timeValue(p.start);
-        if (x > xmax || (x < xmin && (!p.valid_until || x + timeValue(p.valid_until) - timeValue(p.ts) <= xmin))) continue;
-        const px = sx(x),
-          py = sy(p.value);
-        if (p.sample_kind === 'step') {
-          const until = timeValue(p.valid_until) + (absolute ? p.clock_offset * 1000 : -timeValue(p.start));
-          ctx.moveTo(sx(Math.max(x,xmin)),py); ctx.lineTo(sx(Math.min(until,xmax)),py);
-        } else if (last === null || x - last > 30000 || ['event','interval','episode'].includes(p.sample_kind)) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-        last = x;
-        drawn.push({ px, py, p, key });
-      }
-      ctx.stroke();
-      for (const d of drawn.filter((d) => d.key === key)) {
-        ctx.beginPath();
-        ctx.arc(d.px, d.py, d.p.valid ? 2 : 4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-  }
-  function updateSummary() {
-    const visible = points.filter((p) => !hidden.has(seriesKey(p)));
-    let min = Infinity,
-      max = -Infinity,
-      sum = 0;
-    for (const p of visible) {
-      min = Math.min(min, p.value);
-      max = Math.max(max, p.value);
-      sum += p.value;
-    }
-    $("#metric-summary", root).innerHTML =
-      `<div>CAMPIONI<strong>${number(visible.length)}</strong></div><div>MIN<strong>${visible.length ? number(min) : "—"}</strong></div><div>MEDIA DEI CAMPIONI<strong>${visible.length ? number(sum / visible.length) : "—"}</strong></div><div>MAX<strong>${visible.length ? number(max) : "—"}</strong></div><div>UNITÀ<strong>${esc(visible[0]?.unit || "—")}</strong></div>`;
-  }
-  async function load() {
-    const ticket = ++request;
-    const params = new URLSearchParams({
-      calls: ids.join(","),
-      name: selectedMetric(),
-      direction: $("#metric-name",root).value.split("|")[1]||"",
-      statistic: $("#metric-stat", root).value,
-      invalid: $("#include-invalid", root).checked ? "1" : "0",
-    });
-    $("#csv-link", root).href = "/api/metrics?" + params + "&format=csv";
-    const data = await api("metrics?" + params);
-    if (ticket !== request || !root.isConnected) return;
-    points = data.filter(p=>p.value!==null && Number.isFinite(p.value));
-    const episodes=data.filter(p=>p.episode).map(p=>({...p.episode,side:`P${p.perspective_id} · ${p.label}`}));
-    $("#metric-episodes",root).innerHTML=episodes.length?incidentTable({incidents:episodes,incident_warnings:[]}):"";
-    hidden.clear();
-    zoom = null;
-    const unit = points[0]?.unit;
-    $("#unit-note", root).textContent =
-      unit === "raw"
-        ? "Unità KPE non dichiarata: valori originali, senza conversione. last / avg / min / max sono statistiche emesse dal motore."
-        : "RTCP usa le unità esplicite del log. Il ping ICMP misura un endpoint di rete, non la latenza audio. I vuoti oltre 30 s interrompono le linee.";
-    if(params.get('name')==='vd.missing_packets') $('#unit-note',root).textContent='Pacchetti mancanti dichiarati per evento NART: punti isolati, non percentuale e non perdita definitiva. Non sommare segnalazioni come pacchetti unici persi; consulta il messaggio originale.';
-    if(params.get('name')==='derived.silence_delta') $('#unit-note',root).textContent='Incremento tra due campioni dello stesso contatore/device/flusso, in ms. Punti isolati al secondo campione; primo valore, reset e intervalli oltre 30 s sono omessi. Entrambi i campioni sono nel tooltip e nel CSV.';
-    if(params.get('name').startsWith('incident.')) $('#unit-note',root).textContent='Durata degli episodi al momento della segnalazione (punti isolati). Il tooltip distingue durata dichiarata e minimo stimato. Durate ignote non diventano zero e restano nella tabella. Orari della tabella originali; offset solo sul grafico.';
-    $('#unit-note',root).textContent+=' Direzioni rispetto all’app e al suo peer RTP, che può essere un GW. RTT è bidirezionale. Sorgenti senza ruolo dichiarato: app presunta; xcoder non mappato senza verifica della tratta.';
-    $('#unit-note',root).textContent=(options.find(o=>o.value===$('#metric-name',root).value)?.title||'')+'. '+$('#unit-note',root).textContent;
-    if(!data.length) $('#unit-note',root).textContent+=' Nessun campione calcolabile/disponibile nelle chiamate selezionate.';
-    $("#chart-legend", root).innerHTML = series()
-      .map(
-        ([key], i) =>
-          `<button data-series="${i}"><span class="series-dot">●</span>${esc(key)}</button>`,
-      )
-      .join("");
-    $$("#chart-legend button", root).forEach((b, i) => {
-      const dot = $(".series-dot", b); // SVG swatches avoid inline styles under CSP.
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", "10");
-      svg.setAttribute("height", "10");
-      const circle = document.createElementNS(svg.namespaceURI, "circle");
-      for (const [k, v] of Object.entries({
-        cx: 5,
-        cy: 5,
-        r: 4,
-        fill: colors[i % colors.length],
-      }))
-        circle.setAttribute(k, v);
-      svg.append(circle);
-      dot.replaceWith(svg);
-      b.onclick = () => {
-        const key = series()[i][0];
-        hidden.has(key) ? hidden.delete(key) : hidden.add(key);
-        b.classList.toggle("disabled", hidden.has(key));
-        draw();
-        updateSummary();
-      };
-    });
-    updateSummary();
-    draw();
-  }
-  statsOptions();
-  $("#metric-name", root).onchange = safe(() => {
-    statsOptions();
-    return load();
-  });
-  $("#metric-stat", root).onchange = safe(load);
-  $("#include-invalid", root).onchange = safe(load);
-  $("#chart-axis", root).onchange = () => {
-    zoom = null;
-    draw();
-  };
-  $("#reset-zoom", root).onclick = () => {
-    zoom = null;
-    draw();
-  };
-  canvas.onwheel = (e) => {
-    if (!bounds) return;
-    e.preventDefault();
-    const f = e.deltaY > 0 ? 1.4 : 0.7,
-      anchor = Math.max(
-        0,
-        Math.min(1, (e.offsetX - bounds.left) / (bounds.right - bounds.left)),
-      ),
-      center = bounds.xmin + (bounds.xmax - bounds.xmin) * anchor,
-      span = (bounds.xmax - bounds.xmin) * f;
-    zoom = [center - span * anchor, center + span * (1 - anchor)];
-    draw();
-  };
-  canvas.onmousemove = (e) => {
-    let closest = null,
-      dist = Infinity;
-    for (const d of drawn) {
-      const dd = Math.hypot(d.px - e.offsetX, d.py - e.offsetY);
-      if (dd < dist) {
-        dist = dd;
-        closest = d;
-      }
-    }
-    if (!closest || dist > 45) {
-      tooltip.hidden = true;
-      return;
-    }
-    const p = closest.p;
-    tooltip.textContent = `${number(p.value)} ${p.unit}${p.valid ? "" : " · VALORE ANOMALO"}\n${stamp(p.ts)}\n${closest.key}\n${p.filename}:${p.line_no}`;
-    if(p.evidence) tooltip.textContent+='\n'+p.evidence.map(e=>`evento ${e.event_id} · ${e.filename}:${e.line}`).join('\n');
-    if(p.valid_until) tooltip.textContent+=`\nValido fino a: ${p.valid_until} · perdita ${number(p.loss_percent)}% · ${p.model.version}`;
-    if(p.interval_seconds) tooltip.textContent+=`\nIntervallo: ${number(p.interval_seconds)} s`;
-    if(p.episode) tooltip.textContent+='\n'+incidentDuration(p.episode)+' · '+p.episode.status;
-    tooltip.hidden = false;
-  };
-  canvas.onmouseleave = () => (tooltip.hidden = true);
-  const ro = new ResizeObserver(draw);
-  ro.observe(canvas);
-  chartCleanup = () => {
-    request++;
-    ro.disconnect();
-  };
-  await load();
+async function mountChart(root, ids, initialMetric = "rtcp.rtt") {
+  if (root) await mountMultiChart(root, ids, initialMetric);
 }
 async function mountEvents(root, base = {}, compact = false) {
   if (!root) return;

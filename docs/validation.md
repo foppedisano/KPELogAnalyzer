@@ -1,4 +1,63 @@
-# Verifica iniziale — 24 settembre 2026
+# Verifiche e stato della versione
+
+[Indice](README.md) · [Limiti aperti](open-issues.md)
+
+## Verifica corrente — 27 settembre 2026
+
+- **107 test Python superati**, con database temporanei e fixture sintetiche:
+  parser/API, attribuzione, migrazioni fino a schema 8, deduplicazione,
+  MOS, geografia, mobilità e telemetria strutturata.
+- Sintassi verificata per tutti gli script `app/static/*.js`.
+- **3 test Node sulle scale superati**: conteggi interi piccoli/grandi/negativi,
+  percentuali frazionarie e scala MOS con conservazione delle anomalie.
+- Esempi telemetria v1 (9 record) e v1.1 (14 record) validati dalla CLI.
+- Collegamenti Markdown locali verificati; catalogo rigenerato dalla fonte
+  condivisa con UI/API, senza modificare a mano le schede generate.
+- Nel collaudo browser del grafico: default MOS downstream, ricerca, aggiunta e
+  rimozione di metriche, RTT/jitter sullo stesso pannello, perdita e pacchetti
+  su scale distinte, zoom e cursore comuni, confronto chiamate e apertura import.
+- Docker aggiornato e health verificato su `http://127.0.0.1:8080/`.
+  Il nuovo asset `call-chart.js` è servito correttamente.
+
+L'apertura del pannello import non equivale a un upload browser end-to-end.
+Un precedente tentativo di upload nel browser incorporato aveva restituito
+“Failed to fetch”; gli import sono coperti dai test HTTP e dal precedente smoke
+Docker isolato, non da una nuova importazione sintetica nel DB personale.
+
+Questi controlli non certificano semantiche proprietarie, accuratezza percettiva
+MOS, copertura di ogni versione app/GW o previsioni di rete. I log reali, i DB e
+le credenziali non fanno parte delle fixture pubblicate.
+
+## Come ripetere i controlli
+
+```sh
+python -m unittest discover -v
+python scripts/build_metric_docs.py
+python -m app.telemetry docs/examples/telemetry-v1.jsonl docs/examples/telemetry-v1.1.jsonl
+node --test tests/test_chart_scale.js
+node --check app/static/app.js
+node --check app/static/call-chart.js
+node --check app/static/diagnostics.js
+node --check app/static/analysis-ui.js
+node --check app/static/geography.js
+node --check app/static/mos.js
+node --check app/static/topology.js
+node --check app/static/conversations.js
+```
+
+Node serve soltanto alle verifiche frontend, non all'esecuzione della piattaforma.
+Lo smoke `python scripts/smoke_test.py --demo` aggiunge import: usarlo soltanto
+su un servizio di prova o su una nuova installazione. I test unitari creano DB
+isolati. Non eseguire esperimenti sui dati personali per aggiornare questa pagina.
+
+## Cronologia
+
+Le sezioni datate sotto descrivono la versione provata **in quel momento**.
+Frasi come “MOS non disponibile” o vecchi conteggi di test non rappresentano
+la funzionalità corrente. I conteggi storici degli archivi non sono campioni
+sintetici di riferimento né totali attesi su ogni installazione.
+
+## Verifica iniziale — 24 settembre 2026
 
 Verifica su Windows con il runtime Python locale, senza dipendenze del progetto:
 

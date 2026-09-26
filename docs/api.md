@@ -1,4 +1,10 @@
-# Local API
+# API locale
+
+[Indice](README.md) · [Modello dei dati](architecture.md)
+
+Riferimento del servizio attuale, schema 8. Le sezioni con numeri di schema
+indicano l’introduzione della funzione, non endpoint separati per versione.
+Il servizio è per analisi locale: non espone ancora previsioni o piani operativi.
 
 Base URL: `http://localhost:8080/api`. JSON unless noted. No credentials are needed on this loopback-only service. Foreign Host/Origin headers are rejected. Do not expose it publicly.
 
@@ -47,7 +53,7 @@ For portable agent workflows, prefer `python -m app.cli` to shell-specific quoti
 - `POST /api/text-import`: JSON `{"label":"Device A","files":[{"name":"VDlog.txt","text":"…"},{"name":"rtplog.txt","text":"…"}]}`. One device per request, 1–20 files, 40 MiB/file, 64 MiB total JSON body. Uses the same bounded/path-validated ZIP pipeline internally; deterministic file timestamps support duplicate detection.
 - `POST /api/windows`: JSON `{"import_id":1,"line_id":0,"start":"2026-01-01 12:00:00","end":"2026-01-01 12:01:00","title":"Analyst window"}`. Timestamps without timezone, start < end. Returns `call_id,perspective_id`. Assigns unassigned line-specific observations; rejects overlap with any existing same-source/line perspective. No automatic merge with SIP calls.
 
-Diagnostic points carry `t` (neutral-axis epoch seconds, not a declaration of UTC timezone), `value` (ms), and `evidence` containing event/metric IDs, file and normalized line. Derived points reference each input event. Silence counters remain ms in JSON; the UI right axis displays seconds. `derived.silence_delta` includes `interval_seconds`. Event updates and interval deltas should not be interpolated as continuous measurements.
+Diagnostic points carry `t` (neutral-axis epoch seconds, not a declaration of UTC timezone), `value` (nell’unità della serie), and `evidence` containing event/metric IDs, file and normalized line. Derived points reference each input event. Silence counters remain ms in JSON; the UI right axis displays seconds. `derived.silence_delta` includes `interval_seconds`. Event updates and interval deltas should not be interpolated as continuous measurements.
 
 
 ## Workspace extension (schema 3 / parser 1.2)
@@ -97,3 +103,48 @@ manuali; non è una fotografia immutabile del momento dell’upload. Le sessioni
 senza Call-ID restano separate secondo le regole di attribuzione esistenti.
 Uno ZIP senza chiamate restituisce tre zeri; reimportare lo stesso ZIP non crea
 una nuova sorgente. Nessuna migrazione o modifica ai log.
+
+## Mappa qualità
+
+`GET /api/geography` accepts `cell` (50,100,250,500,1000,5000,10000 metres),
+`direction` (downstream/upstream), `quality` (fresh/declared), optional `start`
+and exclusive `end` in original legacy log time or UTC for structured telemetry.
+No implicit timezone conversion reconciles these clocks. Aggregates contain no source identities.
+`GET /api/map-tile?z=...&x=...&y=...` serves optional OSM background tiles with
+a local cache. [Method, limits, privacy and schema upgrade](geography.md).
+
+`/api/geography` also accepts `platform=all|android|ios|desktop|unknown`,
+`access=all|cellular|wifi|ethernet|other|unknown`,
+`upstream=all|mobile_direct|tethering|onboard_wifi|fixed|unknown`, and
+`operator=all|unknown|<explicit operator>`. Network context is intersected with
+MOS intervals before weighted aggregation. [Schema 7 and semantics](mobility.md).
+
+## Structured telemetry
+
+`GET /api/telemetry`: canonical record/evidence/conflict/interval counts and bounded issues with file/line evidence. See [schema 8 and telemetry 1.1](telemetry-integration.md). Validated intervals also appear in `/api/mos`, `/api/metrics` and `/api/geography`. No prediction/plan delivery endpoint exists yet.
+
+## MOS e grafico multimetriche
+
+`GET /api/mos?local=1&peer=2&local_role=app` restituisce `model`, serie
+`downstream` e `upstream`, provenienza delle due direzioni e contesto. `peer` è
+facoltativo e deve appartenere a una sorgente distinta; `local_role` ammette
+`app` (default) e `gw`. Scegliere il peer dichiara esplicitamente la tratta:
+la sua ricezione locale sostituisce il fallback RTCP senza colmarne le lacune.
+[Metodo e campi temporali](mos.md).
+
+`GET /api/calls` include `mos` con prospettiva di riferimento, fonte e riepiloghi
+downstream/upstream: `minimum`, `maximum`, `mean`, `covered_seconds`,
+`coverage_percent` ed eventi degli estremi, quando calcolabili. `mean` pesa il
+MOS sulla durata, non sul numero di report. `null` non equivale a zero.
+Il frontend ordina le righe restituite; non è una paginazione ordinata dell'intero DB.
+
+Il grafico multimetriche riusa una richiesta `/api/metrics` per nome, direzione
+e statistica. Non introduce una nuova API né somma metriche di unità diverse.
+Le richieste sono concorrenti ma limitate a quattro per caricamento; il limite
+di 100.000 campioni resta per richiesta. Una metrica selezionabile può non avere
+campioni nella chiamata. I CSV rimangono separati e indipendenti da zoom/visibilità.
+
+`measurement_context` esprime l'interpretazione della direzione; `direction`
+conserva quella del dato. Nei dati strutturati `clock_domain=UTC` distingue
+l'orologio dichiarato dal tempo legacy senza fuso. Non applicare arbitrariamente
+conversioni locali ai timestamp originali.

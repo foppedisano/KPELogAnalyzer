@@ -95,14 +95,23 @@ class Handler(BaseHTTPRequestHandler):
             def q(key, default=''):
                 return query.get(key,[default])[0]
             if method == 'GET' and not path.startswith('/api/'):
-                mapping = {'/':'index.html','/app.js':'app.js','/mos.js':'mos.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
+                mapping = {'/':'index.html','/app.js':'app.js','/call-chart.js':'call-chart.js','/geography.js':'geography.js','/basemap.json':'basemap.json','/mos.js':'mos.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
                 if path not in mapping:
                     return self.send({'error':'Non trovato'},404)
                 filename = mapping[path]
-                mime = {'html':'text/html','js':'text/javascript','css':'text/css'}[filename.rsplit('.',1)[1]]
+                mime = {'html':'text/html','js':'text/javascript','css':'text/css','json':'application/json'}[filename.rsplit('.',1)[1]]
                 return self.send((STATIC/filename).read_bytes(),mime=mime+'; charset=utf-8')
             db = connect()
             if method == 'GET':
+                if path == '/api/map-tile':
+                    from .map_tiles import tile
+                    return self.send(tile(q('z'),q('x'),q('y'),self.headers.get('Referer','http://127.0.0.1:8080/')),mime='image/png')
+                if path == '/api/geography':
+                    from .geography import aggregate
+                    return self.send(aggregate(db,{k:q(k) for k in ('cell','direction','quality','start','end','platform','access','upstream','operator') if q(k)}))
+                if path == '/api/telemetry':
+                    from .telemetry_store import status
+                    return self.send(status(db))
                 if path == '/api/mos':
                     from .mos import analysis
                     return self.send(analysis(db,int(q('local')),int(q('peer')) if q('peer') else None,q('local_role','app')))
@@ -232,7 +241,7 @@ class Handler(BaseHTTPRequestHandler):
                     if q('format')=='csv':
                         out = io.StringIO()
                         if data:
-                            writer = csv.DictWriter(out,fieldnames=data[0].keys());writer.writeheader()
+                            writer = csv.DictWriter(out,fieldnames=list(dict.fromkeys(k for row in data for k in row)));writer.writeheader()
                             for row in data:
                                 # Protect spreadsheet formula evaluation in user-controlled text.
                                 writer.writerow({k:("'"+v if isinstance(v,str) and v.startswith(('=','+','-','@')) else v) for k,v in row.items()})

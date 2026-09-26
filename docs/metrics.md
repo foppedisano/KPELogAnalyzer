@@ -2,20 +2,34 @@
 
 Questa guida è generata da `app/catalog.py`, la stessa fonte usata da **Guida alle metriche** nell’interfaccia e da `GET /api/catalog`. Rigenerazione: `python scripts/build_metric_docs.py`.
 
+Per una prima lettura: [capire le metriche](metric-reading.md),
+[logica della piattaforma](platform-guide.md) e [grafico multimetriche](call-chart.md).
+Le schede sotto sono il riferimento tecnico; il metodo MOS completo è in [mos.md](mos.md).
+
 ## Regole comuni
 
 - **Prospettiva**: osservazione di una chiamata in una sorgente importata. Non identifica permanentemente un telefono: due export dello stesso dispositivo possono duplicarsi.
 - **Downstream / upstream**: rispetto all’app. Incoming RTCP e VD descrivono la ricezione locale (downstream); jitter/loss dei Receiver Report outgoing descrivono la ricezione del peer/GW (upstream). RTT e ping sono bidirezionali. Per xcoder o tratta ignota si mantengono ricezione locale/del peer, senza inversione automatica. Sorgenti senza ruolo dichiarato: app presunta, non identità verificata.
 - **Flow / SSRC / device**: restano distinti; non aggregare flussi o destinatari diversi. Il device selezionato nella diagnostica filtra le metriche VD; RTT mostra separatamente tutti i flow/SSRC attribuiti alla prospettiva.
-- **sample / gauge**: osservazione al timestamp. **event**: aggiornamento esplicito, senza interpolazione. **counter**: contatore cumulativo soggetto a reset. **interval**: differenza sull’intervallo indicato.
+- **sample / gauge**: osservazione al timestamp. **event**: aggiornamento esplicito, senza interpolazione. **counter**: contatore cumulativo soggetto a reset. **interval**: valore riferito a un intervallo (delta oppure finestra esplicita). **step**: valore mantenuto fino a una scadenza dichiarata; il MOS legacy usa questa rappresentazione.
 - **last / avg / min / max**: statistiche riportate da KPE, non calcolate dall’analizzatore. Non è nota automaticamente la loro finestra temporale. La media nelle tabelle RTCP è aritmetica sui campioni, non pesata per durata o pacchetti.
-- **Unità**: µs ÷ 1000 = ms; ms ÷ 1000 = s. Il DB conserva le metriche VD in ms, compreso il contatore di silenzio; la vista consente di scegliere ms oppure secondi. `raw` significa unità non confermata.
+- **Unità**: µs ÷ 1000 = ms; ms ÷ 1000 = s. Il DB conserva le metriche VD in ms, compreso il contatore di silenzio; Diagnostica A/B consente di scegliere ms oppure secondi; il grafico della chiamata mantiene ms. `raw` significa unità non confermata.
 - **Validità**: valori finiti negativi e percentuali fuori 0–100 restano con `valid=0`. Valori mancanti, non numerici, NaN e infinito non diventano zero. La diagnostica esclude i campioni invalidi.
 - **Provenienza**: `metrics.event_id` porta a `events` e al file. `source_line` è la riga precisa del campo per il nuovo estrattore; se nulla usare `events.line_no`, inizio del record. `raw_value/raw_unit` preservano la conversione del nuovo estrattore; possono essere null per metriche precedenti.
 - **Orologio**: timestamp originali invariati, senza fuso dedotto. L’offset della sorgente, in secondi, si somma solo per allineamento nei grafici e derivazioni diagnostiche. Un offset positivo sposta la sorgente in avanti.
-- **Deduplicazione**: osservazioni nuove identiche per sorgente, timestamp, metrica, device, linea, flow, SSRC, valore e tipo sono contate una sola volta. Nessuna deduplicazione tra sorgenti.
+- **Deduplicazione**: osservazioni nuove identiche per sorgente, timestamp, metrica, device, linea, flow, SSRC, valore e tipo sono contate una sola volta. Per i log tradizionali non si fondono genericamente export diversi. La telemetria strutturata deduplica source_id/event_id tra ZIP; la mappa ha regole proprie di unione delle evidenze sovrapposte. Vedi [logica della piattaforma](platform-guide.md).
 
 ## Schede
+
+### Perdita RTP su intervallo verificato — `telemetry.network_loss`
+
+**Unità:** %. **Tipo:** interval.
+
+Perdita riferita a una finestra esplicita, prima di PLC/FEC e scarti di playout. Timestamp UTC derivato dal tempo monotono; originali ed evidenze conservati.
+
+**Origine e calcolo:** Telemetria strutturata: rtp-sequence-window/1 oppure delta dei contatori RTCP SR/RR..
+
+**Limiti:** Contatori di arrivo e attesi non sono sottratti senza una coorte comune. Reset, conflitti, finestre sovrapposte e gap RTCP oltre 30 s escludono la derivazione. Non è una misura di qualità percepita. Per i report remoti il tempo è quello locale di osservazione dei report, non una sincronizzazione con il peer.
 
 ### Pacchetti mancanti per evento NART — `vd.missing_packets`
 
@@ -111,7 +125,7 @@ Durata dell’audio presente nel buffer di ricezione NART al momento del campion
 
 **Unità:** ms (grafico: ms o s). **Tipo:** counter.
 
-Durata cumulativa del silenzio saltato dichiarata dal device. Nel grafico si può scegliere ms oppure dividere ancora per 1000 per mostrare secondi.
+Durata cumulativa del silenzio saltato dichiarata dal device. In Diagnostica A/B si può scegliere ms oppure dividere ancora per 1000 per mostrare secondi; nel dettaglio chiamata resta in ms.
 
 **Origine e calcolo:** silence usecs skipped so far: … (÷1000); silence msecs skipped so far: ….
 
@@ -253,17 +267,26 @@ Conteggio RTP trasmesso dichiarato dal motore.
 
 Indice stimato a profilo costante per confrontare la perdita nelle due direzioni. R=93.2−95p/(p+25.1), limitato a 0–100; MOS=1+0.035R+0.000007R(R−60)(100−R).
 
-**Origine e calcolo:** Perdita RTCP (%) locale o dichiarata dal peer. Profilo loss-reference-1: G.711 10 ms, PLC Appendix I, Ie=0, Bpl=25.1, BurstR=1, R base=93.2..
+**Origine e calcolo:** Perdita RTCP (%) locale o dichiarata dal peer, oppure perdita da finestre strutturate verificate. Profilo loss-reference-1: G.711 10 ms, PLC Appendix I, Ie=0, Bpl=25.1, BurstR=1, R base=93.2..
 
-**Limiti:** Non è qualità vocale misurata né E-model completo. Non valuta jitter, ritardo, scarti, burst o PLC reale. Il report riguarda il passato; il valore viene mantenuto al massimo 30 s fino al report successivo o alla fine chiamata. Report invalidi o discordanti interrompono la curva. Nel pannello MOS il peer è scelto esplicitamente e la sua ricezione locale è riutilizzata. Riferimenti: ITU-T G.107 (2015), G.113 (2024) tabella I.4.
+**Limiti:** Non è qualità vocale misurata né E-model completo. Non valuta jitter, ritardo, scarti, burst o PLC reale. Nei log tradizionali il report riguarda il passato; il valore viene mantenuto al massimo 30 s fino al report successivo o alla fine chiamata. La telemetria verificata descrive invece la sua finestra esplicita già osservata. Report invalidi o discordanti interrompono la curva. Nel pannello MOS il peer è scelto esplicitamente e la sua ricezione locale è riutilizzata. Riferimenti: ITU-T G.107 (2015), G.113 (2024) tabella I.4.
 
 ## Lettura del grafico e dei momenti critici
+
+Nel dettaglio chiamata e in Confronta, **Aggiungi metriche** seleziona più parametri.
+Stessa unità: stesso pannello; unità diverse: pannelli temporalmente sincronizzati.
+Le metriche raw rimangono separate. I conteggi hanno tacche intere, le percentuali
+possono avere decimali. Il MOS normale usa scala 1–5. Le etichette × rimuovono
+metriche; la legenda nasconde serie. Le statistiche sono per serie, senza mescolare
+unità, sorgenti o flussi. MOS e finestre esplicite usano l’intervallo di validità
+nel tooltip; gli altri punti usano la tolleranza indicata. [Guida](call-chart.md).
+
 
 La diagnostica mostra A continuo, B tratteggiato, WARNING come punti isolati; anche i delta sono punti riferiti a intervalli. Le linee si interrompono per distanze superiori a 30 secondi. Il tooltip condiviso mostra per ciascuna serie il campione più vicino entro ±2,5 secondi, con il suo orario effettivo: valori visualizzati insieme non sono necessariamente simultanei. Dove manca un campione compare una lacuna esplicita. Le metriche derivate sono riconoscibili dal prefisso `derived.`.
 
 Le somme A+B (audio occupato e limiti dinamici, mantenute distinte) usano l’unione dei timestamp dei buffer, solo dove entrambi hanno un valore esatto o due campioni distanti al massimo 30 secondi. Fra i due campioni si usa `a + (b-a) × (t-ta)/(tb-ta)`. Non si estrapola. Il JSON esportato conserva tutte le evidenze, incluse le coppie usate nell’interpolazione. Senza copertura comune non si genera una somma. Le metriche derivate sono calcolate su richiesta, non persistite nella tabella `metrics`. Il periodo di analisi filtra i campioni prima delle derivazioni, quindi non si usano campioni fuori finestra. Colori, simboli e visibilità sono configurabili e salvabili. Loss (%) e durate (ms) hanno assi distinti; con silenzio in secondi e tre unità visibili si usano pannelli temporalmente allineati.
 
-I momenti critici riportano il massimo osservato di ciascuna serie con timestamp, evento e file:riga. Le soglie iniziali RTT 200 ms e somma buffer 500 ms sono filtri esplorativi modificabili, non soglie certificate o diagnosi. Il massimo della singola serie non prova correlazione temporale con altri massimi. Occorre verificare contemporaneità, peer effettivo, instradamento e copertura. La piattaforma non assegna automaticamente la responsabilità della rete e non stima MOS o ritardo vocale end-to-end.
+I momenti critici riportano il massimo osservato di ciascuna serie con timestamp, evento e file:riga. Le soglie iniziali RTT 200 ms e somma buffer 500 ms sono filtri esplorativi modificabili, non soglie certificate o diagnosi. Il massimo della singola serie non prova correlazione temporale con altri massimi. Occorre verificare contemporaneità, peer effettivo, instradamento e copertura. La piattaforma non assegna automaticamente la responsabilità della rete. Il MOS a profilo fisso valuta solo la perdita; il ritardo vocale end-to-end non è misurato.
 
 ## Versione dell’app
 

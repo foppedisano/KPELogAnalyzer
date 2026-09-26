@@ -48,16 +48,20 @@ viene pubblicato su Git. Non cambiare il binding locale in `0.0.0.0`.
 ## Analizzare i propri log
 
 1. **Importa ZIP**: carica uno o più log set. Ogni archivio resta una sorgente.
-2. **Chiamate**: apri una chiamata e scegli parametro e statistica. Tooltip e
-   CSV mantengono i riferimenti ai log.
-3. **Diagnostica A/B**: scegli prospettive/device, confronta metriche, episodi
+2. **Sorgenti e copertura**: verifica chiamate distinte, nuove/già presenti e avvisi.
+3. **Chiamate**: apri il MOS downstream, poi usa **Aggiungi metriche** o **Rete**.
+   La × rimuove una metrica; legenda, cursore e CSV conservano i riferimenti ai log.
+4. **Diagnostica A/B**: scegli prospettive/device, confronta metriche, episodi
    e somme esplicite; correggi gli orologi solo se hai elementi per farlo.
-4. **App e xcoder**: associa sessione, partecipante e componente quando hai
+5. **App e xcoder**: associa sessione, partecipante e componente quando hai
    entrambi i punti di osservazione. Vedi [limiti xcoder](open-issues.md).
 
 Se un formato non viene riconosciuto, usa File e finestre manuali oppure
 Esplora log/SQL. La mancata attribuzione viene segnalata, non colmata con
-associazioni arbitrarie. Consulta [metriche](metrics.md) e [diagnostica](diagnostics.md).
+associazioni arbitrarie. Parti da [come funziona](platform-guide.md) e [capire le metriche](metric-reading.md);
+consulta [catalogo](metrics.md), [grafici](call-chart.md) e [diagnostica](diagnostics.md).
+La [Mappa qualità](geography.md) richiede posizioni associabili: non deduce
+coordinate dall’operatore o dagli interlocutori.
 
 ## Collaudo con dati sintetici (facoltativo)
 

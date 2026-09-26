@@ -64,7 +64,7 @@ def connect(db_path=None):
 def init(db):
     db.executescript(SCHEMA)
     version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-    if version not in ('1', '2', '3', '4', '5'):
+    if version not in ('1', '2', '3', '4', '5', '6', '7', '8'):
         raise RuntimeError('Unsupported database schema; back up the database before upgrading')
     if version == '1':
         filename = db.execute('PRAGMA database_list').fetchone()[2]
@@ -144,8 +144,68 @@ def init(db):
             db.execute('''CREATE TABLE leg_outcomes(event_id INTEGER PRIMARY KEY REFERENCES events(id),
                 perspective_id INTEGER NOT NULL REFERENCES perspectives(id),outcome TEXT NOT NULL)''')
             db.execute("UPDATE meta SET value='5' WHERE key='schema_version'")
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '5':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT COUNT(*) FROM imports').fetchone()[0]:
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v6.bak')
+            if backup.exists():
+                raise RuntimeError(f'Backup already exists: {backup}; preserve or rename it before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        from .geography import SCHEMA as GEO_SCHEMA
+        try:
+            db.executescript("BEGIN IMMEDIATE;" + GEO_SCHEMA + "UPDATE meta SET value='6' WHERE key='schema_version'; COMMIT;")
+        except Exception:
+            db.rollback()
+            raise
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '6':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT COUNT(*) FROM imports').fetchone()[0]:
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v7.bak')
+            if backup.exists():
+                raise RuntimeError(f'Backup already exists: {backup}; preserve or rename it before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        from .mobility import SCHEMA as MOBILITY_SCHEMA
+        try:
+            db.executescript("BEGIN IMMEDIATE;" + MOBILITY_SCHEMA + "UPDATE meta SET value='7' WHERE key='schema_version'; COMMIT;")
+        except Exception:
+            db.rollback()
+            raise
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '7':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT COUNT(*) FROM imports').fetchone()[0]:
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v8.bak')
+            if backup.exists():
+                raise RuntimeError(f'Backup already exists: {backup}; preserve or rename before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        from .telemetry_store import SCHEMA as TELEMETRY_SCHEMA
+        try:
+            db.executescript("BEGIN IMMEDIATE;" + TELEMETRY_SCHEMA + "UPDATE meta SET value='8' WHERE key='schema_version'; COMMIT;")
+        except Exception:
+            db.rollback()
+            raise
     from .enrichment import enrich_pending
     enrich_pending(db)
+    from .geography import pending
+    pending(db)
+    from .mobility import pending as mobility_pending
+    mobility_pending(db)
+    from .telemetry_store import pending as telemetry_pending
+    telemetry_pending(db)
 
 
 def rows(db, sql, args=()):

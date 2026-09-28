@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
 
-PARSER_VERSION = '1.10.0'
+PARSER_VERSION = '1.11.0'
 MAX_ZIP = 64 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 MAX_FILE = 40 * 1024 * 1024
@@ -154,7 +154,10 @@ def read_zip(data):
         for info in infos:
             name = info.filename.replace('\\', '/')
             p = PurePosixPath(name)
-            if p.is_absolute() or '..' in p.parts or ':' in name or ((info.external_attr >> 16) & 0o170000) == 0o120000:
+            # Android rotations include ISO timestamps in basenames. These names
+            # stay in SQLite: ZIP members are read in memory, never extracted.
+            path_check = re.sub(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', '', p.name)
+            if p.is_absolute() or '..' in p.parts or ':' in str(p.parent) or ':' in path_check or ((info.external_attr >> 16) & 0o170000) == 0o120000:
                 raise ValueError('Percorso ZIP non sicuro')
             if name in names:
                 raise ValueError('Nomi duplicati nello ZIP')
@@ -282,6 +285,17 @@ def ingest(db, data, name, label=''):
                     ci_active[r['line']] = leg
             elif 'terminated line id:' in r['text'] and r['line'] in ci_active:
                 ci_active.pop(r['line'])['end'] = r['ts']
+        from .source_dedup import infer, save, previous, refresh_duplicates
+        filenames = {r['id']:r['name'] for r in db.execute('SELECT id,name FROM files WHERE import_id=?',(iid,))}
+        identity = infer((dict(r,filename=filenames[r['file']]) for r in all_records),filenames.values())
+        save(db,iid,identity)
+        prior = previous(db,iid,identity)
+        skipped = {}
+        def mark_skip(cid):
+            if cid not in prior:return False
+            old=prior[cid];skipped[cid]=old
+            db.execute('INSERT OR IGNORE INTO import_call_skips(import_id,call_id,canonical_id) VALUES(?,?,?)',(iid,old['call_id'],old['id']))
+            return True
         by_cid = {}
         for ix, leg in enumerate(legs):
             cid = leg.get('cid')
@@ -298,6 +312,10 @@ def ingest(db, data, name, label=''):
             if not leg.get('end') and failures and not leg.get('connected'):
                 leg['end'] = failures[-1]['ts']
             info = leg.get('summary') or (rs[0]['sip'] if rs else {})
+            if cid and mark_skip(cid):
+                leg.update(skipped=True,call_id=prior[cid]['call_id'],pid=None)
+                by_cid[cid]=leg
+                continue
             key = 'sip:' + cid if cid else f'local:{digest}:{ix}'
             db.execute('INSERT OR IGNORE INTO calls(call_key,sip_call_id,caller,callee,start,end,connected) VALUES(?,?,?,?,?,?,?)',
                        (key, cid, str(info.get('caller','')), str(info.get('callee','')), leg['start'], leg.get('end'), leg.get('connected')))
@@ -313,7 +331,11 @@ def ingest(db, data, name, label=''):
             if cid:
                 by_cid[cid] = leg
             db.execute('UPDATE calls SET start=(SELECT MIN(start) FROM perspectives WHERE call_id=?),end=(SELECT MAX(end) FROM perspectives WHERE call_id=?),connected=(SELECT MIN(connected) FROM perspectives WHERE call_id=?) WHERE id=?', (call_id,call_id,call_id,call_id))
+        for cid,old in skipped.items():
+            windows=[dict(line_id=l['line'],start=l['start'],end=l.get('end')) for l in legs if l.get('cid')==cid and l.get('skipped')]
+            db.execute('UPDATE import_call_skips SET windows=? WHERE import_id=? AND call_id=?',(json.dumps(windows),iid,old['call_id']))
         counts = dict(metrics=0, unassigned_metrics=0, invalid_metrics=0)
+        skipped_events = 0
         for r in all_records:
             if r['parser'] == 'telemetry':
                 event = r['telemetry']
@@ -322,6 +344,9 @@ def ingest(db, data, name, label=''):
                 if not r['errors']:
                     kind = 'telemetry.' + event['type'] + '.' + event['validity']
                     cid = event['payload'].get('stream', {}).get('sip_call_id')
+                    if cid and mark_skip(cid):
+                        skipped_events += 1
+                        continue
                     leg = by_cid.get(cid) if cid else None
                 db.execute('INSERT INTO events(import_id,file_id,line_no,ts,level,kind,text,call_id,perspective_id) VALUES(?,?,?,?,?,?,?,?,?)',
                            (iid,r['file'],r['line_no'],r['ts'],'',kind,r['text'],
@@ -341,6 +366,13 @@ def ingest(db, data, name, label=''):
                 candidates = [l for l in legs if l['start'] <= r['ts'] and l.get('end') and r['ts'] <= l['end']]
                 if len(candidates) == 1:
                     leg = candidates[0]
+            if leg and leg.get('skipped'):
+                # A VD record may contain other devices/lines: retain its shared evidence.
+                section_lines={int(v) for v in re.findall(r'Device name:.*?\bLine (\d+)',r['text'])}
+                if not section_lines or section_lines=={leg['line']}:
+                    skipped_events += 1
+                    continue
+                leg=None
             kind = 'sip' if r['sip'] else ('metric' if 'call flow metric line' in r['text'] or 'RTCP ARRIVED' in r['text'] else r['parser'])
             eid = db.execute('INSERT INTO events(import_id,file_id,line_no,ts,level,kind,text,call_id,perspective_id,line_id) VALUES(?,?,?,?,?,?,?,?,?,?)',
                 (iid,r['file'],r['line_no'],r['ts'],r['level'],kind,r['text'],leg['call_id'] if leg else None,leg['pid'] if leg else None,r['line'])).lastrowid
@@ -359,6 +391,10 @@ def ingest(db, data, name, label=''):
         enrich_mobility(db, iid)
         from .telemetry_store import ingest as ingest_telemetry
         ingest_telemetry(db, iid)
+        save(db,iid,identity)
+        refresh_duplicates(db,iid,identity)
+        if skipped:
+            warnings.append(f"{len(skipped)} chiamate gia presenti dalla stessa sorgente ignorate; {skipped_events} record attribuiti non reinseriti")
         totals = db.execute('''SELECT COUNT(*),COALESCE(SUM(m.call_id IS NULL),0),COALESCE(SUM(m.valid=0),0)
             FROM metrics m JOIN events e ON e.id=m.event_id WHERE e.import_id=?''', (iid,)).fetchone()
         counts.update(zip(('metrics', 'unassigned_metrics', 'invalid_metrics'), totals))
@@ -366,6 +402,7 @@ def ingest(db, data, name, label=''):
             warnings.append(f"{counts['unassigned_metrics']} metriche senza una chiamata attribuibile con certezza")
         if counts['invalid_metrics']:
             warnings.append(f"{counts['invalid_metrics']} valori anomali conservati, esclusi dai grafici per impostazione predefinita")
-        db.execute('UPDATE imports SET file_count=?,event_count=?,warnings=? WHERE id=?', (len(files),len(all_records),json.dumps(warnings),iid))
+        event_count = db.execute('SELECT COUNT(*) FROM events WHERE import_id=?',(iid,)).fetchone()[0]
+        db.execute('UPDATE imports SET file_count=?,event_count=?,warnings=? WHERE id=?', (len(files),event_count,json.dumps(warnings),iid))
     call_count = db.execute('SELECT count(*) FROM perspectives WHERE import_id=?', (iid,)).fetchone()[0]
-    return dict(id=iid, duplicate=False, calls=call_count, events=len(all_records), warnings=warnings, parser_version=PARSER_VERSION, **counts)
+    return dict(id=iid, duplicate=False, calls=call_count, events=event_count, skipped_calls=len(skipped), skipped_events=skipped_events, warnings=warnings, parser_version=PARSER_VERSION, **counts)

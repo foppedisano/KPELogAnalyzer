@@ -82,7 +82,7 @@ provenienza del downstream. Il ruolo è esplicito per la singola analisi.
 
 ## Riepilogo nel registro chiamate
 
-`GET /api/calls` include `mos`: prospettiva dell'import più recente, sorgente,
+`GET /api/calls` include `mos`: prospettiva dell'import più recente non riconosciuta come copia storica, sorgente,
 ruolo assunto/confermato e downstream/upstream. Non fonde export sovrapposti.
 Per ogni direzione: minimo, massimo, media `sum(MOS × secondi) / sum(secondi)`,
 secondi coperti, percentuale della finestra locale connessione–fine (o inizio

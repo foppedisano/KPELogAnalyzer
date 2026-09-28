@@ -22,9 +22,12 @@ def enrich(db,iid):
     marker=f'{VERSION}:{iid}'
     if db.execute('SELECT 1 FROM meta WHERE key=?',(marker,)).fetchone(): return
     perspectives=[dict(p) for p in db.execute('SELECT * FROM perspectives WHERE import_id=?',(iid,))]
+    from .source_dedup import skipped_windows, skip_measurement
+    ignored_windows=skipped_windows(db,iid)
     seen=set()
     for e in db.execute("SELECT * FROM events WHERE import_id=? AND ts IS NOT NULL AND lower(text) LIKE '%missing packet%' ORDER BY ts,id",(iid,)):
         for m in extract(e['text']):
+            if skip_measurement(ignored_windows,perspectives,m['line_id'],e['ts']):continue
             key=(e['ts'],m['signature'])
             if key in seen: continue
             seen.add(key)

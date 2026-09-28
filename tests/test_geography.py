@@ -98,7 +98,7 @@ class GeographyTests(unittest.TestCase):
             db.execute("UPDATE meta SET value='5' WHERE key='schema_version'")
         init(db)
         self.assertEqual(db.execute('SELECT id FROM calls').fetchall(),ids)
-        self.assertEqual(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'8')
+        self.assertEqual(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'10')
         with sqlite3.connect(str(Path(self.temp.name)/'kpe.sqlite3')+'.pre-v6.bak') as old:
             self.assertEqual(old.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'5')
         old.close()

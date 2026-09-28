@@ -29,8 +29,9 @@ async function mountMultiChart(root, ids, initialMetric) {
   root.innerHTML = `<div class="panel"><div class="panel-head"><h2>Andamento delle metriche</h2></div><div class="panel-body">
     <details class="chart-picker"><summary>Aggiungi metriche</summary><label>Cerca una metrica<input type="search" class="metric-search" placeholder="MOS, jitter, pacchetti…"></label><div class="metric-choices"></div></details>
     <div class="toolbar chart-presets">Selezioni rapide: <button data-preset="quality">Qualità</button><button data-preset="network">Rete</button><button data-preset="receive">Ricezione</button><button data-preset="clear">Rimuovi tutte</button></div>
-    <div class="selected-metrics"></div><div class="chart-controls"><label>Allineamento<select class="chart-axis"><option value="relative">Tempo dalla prima evidenza</option><option value="absolute">Orario log + correzione</option></select></label><label class="check"><input type="checkbox" class="chart-invalid"> Mostra anomali</label><button class="reset-zoom">Ripristina zoom</button></div>
-    <p class="muted">Una scala per unità; le metriche raw restano separate. Rotella per ingrandire tutti i pannelli. Clic sulla legenda per nascondere una curva. RTT = andata e ritorno, non ritardo audio.</p>
+    <div class="selected-metrics"></div><div class="chart-controls"><label>Allineamento<select class="chart-axis"><option value="relative">Tempo dalla prima evidenza</option><option value="absolute">Orario log + correzione</option></select></label><label class="check"><input type="checkbox" class="chart-invalid"> Mostra anomali</label><button class="zoom-out" aria-label="Riduci zoom temporale">−</button><button class="zoom-in" aria-label="Aumenta zoom temporale">+</button><button class="reset-zoom">Mostra tutta la chiamata</button></div>
+    <label class="check"><input type="checkbox" class="chart-duplicates"> Mostra copie storiche della stessa sorgente</label>
+    <p class="muted">Di norma ogni sorgente compare una volta per chiamata; flussi e SSRC distinti restano separati. Una scala per unità; le metriche raw restano separate. La rotella scorre la pagina. Ctrl + rotella ingrandisce intorno al puntatore; i pulsanti − e + agiscono al centro. Lo zoom è comune a tutti i pannelli. Clic sulla legenda per nascondere una curva. RTT = andata e ritorno, non ritardo audio.</p>
     <p class="chart-status" role="status"></p><p class="chart-notes muted"></p><div class="multi-panels"></div><div class="multi-readout" aria-live="off">Passa sul grafico per leggere i campioni e le evidenze.</div><div class="metric-statistics"></div><div class="metric-episodes"></div>
     </div></div>`;
   const titleFor = value => options.find(o => o.value === value)?.title || value;
@@ -50,7 +51,7 @@ async function mountMultiChart(root, ids, initialMetric) {
   }
   function params(value, stat) {
     const [name, direction = ''] = value.split('|');
-    return new URLSearchParams({calls: ids.join(','), name, direction, statistic: stat, invalid: $('.chart-invalid', root).checked ? '1' : '0'});
+    return new URLSearchParams({calls: ids.join(','), name, direction, statistic: stat, invalid: $('.chart-invalid', root).checked ? '1' : '0', duplicates: $('.chart-duplicates', root).checked ? '1' : '0'});
   }
   const seriesKey = p => JSON.stringify([p.name,p.statistic,p.call_id,p.perspective_id,p.direction,p.flow,p.ssrc,p.device,p.sample_kind,p.observer]);
   const seriesLabel = p => `${p.name} · ${p.statistic || ''} · #${p.call_id} · P${p.perspective_id} · ${p.label} · ${p.measurement_context?.label || p.direction || ''}${p.flow ? ' · flusso '+p.flow : ''}${p.ssrc ? ' · SSRC '+p.ssrc : ''}${p.device ? ' · '+p.device : ''}`;
@@ -72,7 +73,7 @@ async function mountMultiChart(root, ids, initialMetric) {
       b.onclick = () => {hidden.has(s.key) ? hidden.delete(s.key) : hidden.add(s.key); b.classList.toggle('disabled',hidden.has(s.key)); b.setAttribute('aria-pressed',!hidden.has(s.key)); draw(); readout(); statistics();};
     });
     $$('canvas',root).forEach(canvas => {
-      canvas.onwheel = e => {if (!bounds) return; e.preventDefault(); const fraction = Math.max(0,Math.min(1,(e.offsetX-65)/(canvas.clientWidth-85))), span = Math.max(10,(bounds[1]-bounds[0])*(e.deltaY>0?1.4:.7)), center = bounds[0]+fraction*(bounds[1]-bounds[0]); zoom = [center-span*fraction,center+span*(1-fraction)]; draw();};
+      canvas.onwheel = e => {if (!e.ctrlKey || !bounds) return; e.preventDefault(); if (e.deltaY) changeZoom(e.deltaY > 0 ? 1.4 : .7, Math.max(0, Math.min(1, (e.offsetX-65)/(canvas.clientWidth-85))));};
       canvas.onmousemove = e => {if (!bounds) return; cursor = bounds[0]+Math.max(0,Math.min(1,(e.offsetX-65)/(canvas.clientWidth-85)))*(bounds[1]-bounds[0]); draw(); readout();};
       canvas.onmouseleave = () => {cursor = null; draw();};
     });
@@ -83,6 +84,14 @@ async function mountMultiChart(root, ids, initialMetric) {
       let low=Infinity,high=-Infinity,sum=0;for(const p of s.ps){low=Math.min(low,p.value);high=Math.max(high,p.value);sum+=p.value;}
       return `<tr><td>${esc(seriesLabel(s.ps[0]))} (${esc(s.ps[0].unit)})</td><td>${number(s.ps.length)}</td><td>${number(low)}</td><td>${number(sum/s.ps.length)}</td><td>${number(high)}</td></tr>`;
     }).join('')}</tbody></table></div><p class="muted">Medie aritmetiche dei campioni nell’intera selezione. Nel registro chiamate il MOS medio è invece pesato sulla durata.</p></details>`:'';
+  }
+  function changeZoom(factor, fraction = .5) {
+    if (!bounds) return;
+    const span = Math.max(10, (bounds[1]-bounds[0]) * factor);
+    const center = bounds[0] + fraction * (bounds[1]-bounds[0]);
+    zoom = [center-span*fraction, center+span*(1-fraction)];
+    cursor = null;
+    draw();
   }
   function draw() {
     if (disposed || !root.isConnected) return;
@@ -138,8 +147,11 @@ async function mountMultiChart(root, ids, initialMetric) {
   }
   $('.metric-search',root).oninput=controls;
   $('.chart-invalid',root).onchange=safe(async()=>{controls();await load();});
+  $('.chart-duplicates',root).onchange=safe(async()=>{controls();await load();});
   $('.chart-axis',root).onchange=()=>{zoom=null;cursor=null;draw();};
-  $('.reset-zoom',root).onclick=()=>{zoom=null;draw();};
+  $('.zoom-in',root).onclick=()=>changeZoom(.7);
+  $('.zoom-out',root).onclick=()=>changeZoom(1.4);
+  $('.reset-zoom',root).onclick=()=>{zoom=null;cursor=null;draw();};
   const presets={quality:['derived.mos_reference|incoming','derived.mos_reference|outgoing'],network:['rtcp.rtt','rtcp.jitter|incoming','rtcp.loss|incoming'],receive:['derived.mos_reference|incoming','vd.silence_skipped','vd.missing_packets'],clear:[]};
   $$('[data-preset]',root).forEach(b=>b.onclick=safe(async()=>{selected.clear();for(const value of presets[b.dataset.preset])if(options.some(o=>o.value===value))selected.set(value,defaults(value.split('|')[0]).value);controls();await load();}));
   const observer=new ResizeObserver(draw);observer.observe($('.multi-panels',root));

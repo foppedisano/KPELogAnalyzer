@@ -17,7 +17,7 @@ Le schede sotto sono il riferimento tecnico; il metodo MOS completo è in [mos.m
 - **Validità**: valori finiti negativi e percentuali fuori 0–100 restano con `valid=0`. Valori mancanti, non numerici, NaN e infinito non diventano zero. La diagnostica esclude i campioni invalidi.
 - **Provenienza**: `metrics.event_id` porta a `events` e al file. `source_line` è la riga precisa del campo per il nuovo estrattore; se nulla usare `events.line_no`, inizio del record. `raw_value/raw_unit` preservano la conversione del nuovo estrattore; possono essere null per metriche precedenti.
 - **Orologio**: timestamp originali invariati, senza fuso dedotto. L’offset della sorgente, in secondi, si somma solo per allineamento nei grafici e derivazioni diagnostiche. Un offset positivo sposta la sorgente in avanti.
-- **Deduplicazione**: osservazioni nuove identiche per sorgente, timestamp, metrica, device, linea, flow, SSRC, valore e tipo sono contate una sola volta. Per i log tradizionali non si fondono genericamente export diversi. La telemetria strutturata deduplica source_id/event_id tra ZIP; la mappa ha regole proprie di unione delle evidenze sovrapposte. Vedi [logica della piattaforma](platform-guide.md).
+- **Deduplicazione**: osservazioni nuove identiche per sorgente, timestamp, metrica, device, linea, flow, SSRC, valore e tipo sono contate una sola volta. Per i log tradizionali si ignorano le chiamate già presenti quando il produttore è riconosciuto con prove locali concordanti; le copie storiche restano consultabili. Vedi [identità della sorgente](source-dedup.md). La telemetria strutturata deduplica source_id/event_id tra ZIP; la mappa ha regole proprie di unione delle evidenze sovrapposte. Vedi [logica della piattaforma](platform-guide.md).
 
 ## Schede
 

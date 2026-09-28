@@ -6,7 +6,7 @@
 2. In **Sorgenti e copertura** controlla i periodi disponibili e imposta eventuali offset di orologio. L’offset si somma all’orario nei grafici; non modifica i log.
 3. In **Diagnostica A/B** scegli la prospettiva A, facoltativamente B, e il device NART di ciascuna. Il default è NART0 of Line 0 quando disponibile. Si possono confrontare anche tratte con Call-ID differenti, assumendosene esplicitamente la selezione.
 4. Controlla versioni dell’app, metriche mancanti e flow/SSRC. Una sola sorgente produce un’analisi parziale, senza somma dei buffer.
-5. Nascondi serie dalla legenda, usa la rotella per ingrandire e leggi il tooltip. Gli aggiornamenti del massimo e i delta non vengono uniti in curve continue.
+5. Nascondi serie dalla legenda, usa Ctrl + rotella o i pulsanti − / + per ingrandire; la rotella normale scorre la pagina e leggi il tooltip. Gli aggiornamenti del massimo e i delta non vengono uniti in curve continue.
 6. Consulta **Momenti da verificare**, poi ricerca gli eventi o il file:riga in **Esplora log** / SQL. **Esporta analisi JSON** conserva serie, derivazioni, copertura ed evidenze; le metriche originali restano esportabili in CSV dalla vista Confronta.
 7. Consulta **Guida alle metriche** o [il catalogo](metrics.md) per unità, significato e limiti.
 
@@ -20,7 +20,7 @@ In **File e finestre manuali → Modifica una finestra manuale**, seleziona la f
 
 ## Upgrade storico dalla versione iniziale
 
-Questa sezione descrive il passaggio 1→2; la versione attuale arriva a schema 8
+Questa sezione descrive il passaggio 1→2; la versione attuale arriva a schema 10
 attraverso le migrazioni successive. Vedi [architettura](architecture.md) e
 [aggiornamento e backup](getting-started.md#arresto-aggiornamento-e-backup).
 

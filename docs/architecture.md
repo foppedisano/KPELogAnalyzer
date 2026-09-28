@@ -48,11 +48,12 @@ Le derivazioni sono escluse quando mancano unità, identità o riferimenti affid
 | network_observations, movement_sequences, movement_samples | Contesto rete e sequenze locali senza identificazione del viaggio |
 | telemetry_records, telemetry_evidence | Eventi canonici e tutte le copie originali |
 | telemetry_intervals, telemetry_geo_context | Finestre verificate e contesto delle osservazioni strutturate |
+| import_producers, duplicate_perspectives, import_call_skips | Identità del produttore, copie storiche e chiamate ignorate ([regola](source-dedup.md)) |
 | meta | Versione schema e marker idempotenti di elaborazione |
 
 ### Migrazioni
 
-Lo schema corrente è **8**. Le migrazioni successive preservano ID grezzi e
+Lo schema corrente è **10**. Le migrazioni successive preservano ID grezzi e
 annotazioni. Su DB popolati producono backup consistenti pre-vN; un backup
 omonimo non viene sovrascritto. Servono spazio per backup e arricchimenti.
 Le istruzioni sotto sulle singole versioni descrivono la storia dello schema;
@@ -67,6 +68,7 @@ non vanno interpretate come versioni alternative oggi supportate dal frontend.
 | 5→6 | Archivio geografico posizione–MOS |
 | 6→7 | Rete e sequenze di movimento |
 | 7→8 | Archivio canonico telemetria e intervalli verificati |
+| 8→9 | Identità sorgente e deduplicazione delle chiamate tradizionali |
 
 Prima di aggiornare: **Esporta database**, conserva la copia localmente,
 ricostruisci il container e controlla `/api/health`. Per rollback usa una nuova
@@ -75,7 +77,7 @@ un DB aperto. [Procedura operativa](getting-started.md).
 
 ## Riferimento tecnico dettagliato
 
-## Modello base dei dati (schema 8)
+## Modello base dei dati (schema 10)
 
 | Table | Meaning | Relations |
 |---|---|---|
@@ -196,3 +198,15 @@ references, and derives explicit interval loss/MOS plus geographic associations.
 Conflicting stable IDs retract dependent products. Legacy extractors remain separate.
 Schema 8 adds telemetry_records, telemetry_evidence, telemetry_intervals and
 telemetry_geo_context with a pre-upgrade backup. See [rules, bounds and upgrade](telemetry-integration.md).
+
+## Analisi generali — schema 10
+
+`analytics.py` prepara viste temporanee per richiesta dentro una lettura SQLite
+coerente, esegue SQL parametrizzato e limitato, poi annulla le strutture temporanee.
+`analytics_mos.py` riusa il motore MOS e il contesto rete, espone intervalli,
+episodi, statistiche e join alle evidenze. `mcp_server.py` è un adattatore stdio
+alle API HTTP locali; non replica formule e non apre il database direttamente.
+
+`analysis_recipes` e `analysis_recipe_revisions` conservano configurazioni e
+storico con controllo della revisione. La migrazione 9→10 crea il backup
+`.pre-v10.bak`, preservando log e ID. [Semantica e limiti](analytics.md).

@@ -69,7 +69,8 @@ def call_summary(db, call_id):
     """One declared vantage point; never average duplicate exports or RTP streams."""
     p = db.execute('''SELECT p.*,i.label,r.role FROM perspectives p
         JOIN imports i ON i.id=p.import_id LEFT JOIN observation_roles r ON r.perspective_id=p.id
-        WHERE p.call_id=? ORDER BY p.import_id DESC,p.id DESC LIMIT 1''', (call_id,)).fetchone()
+        WHERE p.call_id=? AND p.id NOT IN (SELECT perspective_id FROM effective_duplicates)
+        ORDER BY p.import_id DESC,p.id DESC LIMIT 1''', (call_id,)).fetchone()
     result = dict(downstream=None, upstream=None, reason='Nessuna prospettiva')
     if p is None:
         return result

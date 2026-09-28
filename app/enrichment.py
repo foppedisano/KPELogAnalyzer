@@ -55,6 +55,8 @@ def observations(text, filename):
 
 def enrich_import(db, iid):
     perspectives = [dict(p) for p in db.execute('SELECT * FROM perspectives WHERE import_id=?', (iid,))]
+    from .source_dedup import skipped_windows, skip_measurement
+    ignored_windows=skipped_windows(db,iid)
     seen = set()
     added = 0
     for row in db.execute('''SELECT e.*, f.name filename FROM events e JOIN files f ON f.id=e.file_id
@@ -64,6 +66,7 @@ def enrich_import(db, iid):
         if version:
             db.execute('INSERT OR IGNORE INTO app_versions VALUES(?,?,?,?,?)', (e['id'], iid, e['ts'], version[1], version[2]))
         for m in observations(e['text'], e['filename']):
+            if skip_measurement(ignored_windows,perspectives,m['line_id'],e['ts']):continue
             signature = (e['ts'], m['name'], m['device'], m['line_id'], m['flow'], m['ssrc'], m['value'], m['sample_kind'])
             if signature in seen:
                 continue

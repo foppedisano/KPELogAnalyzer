@@ -4,8 +4,8 @@
 
 ## Verifica corrente — 27 settembre 2026
 
-- **107 test Python superati**, con database temporanei e fixture sintetiche:
-  parser/API, attribuzione, migrazioni fino a schema 8, deduplicazione,
+- **115 test Python superati**, con database temporanei e fixture sintetiche:
+  parser/API, attribuzione, migrazioni fino a schema 9, deduplicazione,
   MOS, geografia, mobilità e telemetria strutturata.
 - Sintassi verificata per tutti gli script `app/static/*.js`.
 - **3 test Node sulle scale superati**: conteggi interi piccoli/grandi/negativi,
@@ -16,12 +16,18 @@
 - Nel collaudo browser del grafico: default MOS downstream, ricerca, aggiunta e
   rimozione di metriche, RTT/jitter sullo stesso pannello, perdita e pacchetti
   su scale distinte, zoom e cursore comuni, confronto chiamate e apertura import.
+- Identificazione sorgenti e filtro copie storiche verificati via API e browser.
+  Migrazione 8→9 provata due volte su copia del DB reale, preservando tutti
+  i conteggi grezzi; backup automatico verificato prima dell’uso del nuovo schema.
 - Docker aggiornato e health verificato su `http://127.0.0.1:8080/`.
   Il nuovo asset `call-chart.js` è servito correttamente.
+- Smoke Docker isolato: due ZIP sintetici dello stesso produttore/Call-ID,
+  prima chiamata importata e seconda ignorata; metadati e scarto persistono
+  dopo il riavvio del processo. Nessun campione sintetico nel DB personale.
 
 L'apertura del pannello import non equivale a un upload browser end-to-end.
 Un precedente tentativo di upload nel browser incorporato aveva restituito
-“Failed to fetch”; gli import sono coperti dai test HTTP e dal precedente smoke
+“Failed to fetch”; gli import sono coperti dai test HTTP e dallo smoke
 Docker isolato, non da una nuova importazione sintetica nel DB personale.
 
 Questi controlli non certificano semantiche proprietarie, accuratezza percettiva
@@ -160,3 +166,36 @@ Final Docker verification: container healthy on 127.0.0.1:8080, parser 1.2.0. An
   the shared temporal chart, direction filter and evidence tooltip. No console
   errors observed in these flows. Wrapper-only Android events remain raw; KPE
   metric coverage is not fabricated when CallInfo is absent.
+
+
+## Analisi generali e MCP — 27 settembre 2026
+
+- Suite completa: 126 test superati, inclusa la regressione sul cambio/scadenza
+  rete. Sintassi JavaScript e tre test delle scale dei grafici verificati.
+- Query: catalogo, parametri, scope, authorizer, tentativi di impersonare le
+  viste con CTE, limiti di righe/dimensione, episodi, pesatura temporale,
+  dati invalidi, deduplicazione e provenienza verificati su fixture sintetiche.
+- MCP stdio: initialize, tools/list, chiamata HTTP reale, rifiuto scritture,
+  restrizione all'API loopback e ciclo di vita verificati.
+- Migrazione 9→10 ripetuta su copia del DB locale: invariati import, chiamate,
+  prospettive, eventi, metriche e annotazioni. Backup pre-v10 creato.
+- Docker isolato: import di ZIP sintetico, due intervalli MOS, salvataggio di
+  ricetta e riesecuzione dopo riavvio del processo sul medesimo DB temporaneo.
+- Istanza locale aggiornata su http://127.0.0.1:8080/; conteggi originali
+  preservati. Nessun import sintetico aggiunto al database dell'utente.
+- Browser: pagina Analisi libere, caricamento esempi ed esecuzione MOS con
+  copertura visibile; query delle metriche, dettaglio chiamata, cambio metriche,
+  confronto e apertura del dialogo ZIP verificati. Collegamento MCP al container
+  verificato separatamente.
+
+## Episodi audio, inventario e checkpoint — 28 settembre 2026
+
+- Suite completa finale: 132 test Python superati; sintassi di tutti gli script
+  JavaScript verificata. Fixture aggiunte esclusivamente sintetiche.
+- Finestre underrun: caso 200/400 ms, unione sovrapposizioni, osservatori separati,
+  finestre ritagliate, episodi aperti e assenza di evidenze verificati.
+- API locale e schermata Analisi libere verificate sul dataset incidents;
+  export completo paginato con controllo dello snapshot.
+- Inventario del formato recente completato in sola lettura. Piano dei campi
+  mancanti in periodic-metrics-implementation.md; implementazione ancora da fare.
+- Dati, grafici ed evidenze locali restano in data/ e non sono pubblicati.

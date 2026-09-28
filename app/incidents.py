@@ -100,7 +100,7 @@ def reconstruct(signals):
     return episodes
 
 
-def incidents(db, perspective_id, device, offset=0, start=None, end=None):
+def incidents(db, perspective_id, device=None, offset=0, start=None, end=None):
     p=db.execute('SELECT * FROM perspectives WHERE id=?',(perspective_id,)).fetchone()
     if p['line_id'] is None:
         return dict(episodes=[],warning='Linea non nota: episodi non attribuibili con certezza.')
@@ -108,8 +108,10 @@ def incidents(db, perspective_id, device, offset=0, start=None, end=None):
     args=[p['import_id'],p['start']]
     upper=''
     if p['end']: upper=' AND e.ts<=?';args.append(p['end'])
+    args.append(p['call_id'])
     cursor=db.execute('''SELECT e.id,e.ts,e.text,e.line_no,e.call_id,f.name filename FROM events e JOIN files f ON f.id=e.file_id
-        WHERE e.import_id=? AND e.ts>=? '''+upper+''' AND ((e.text LIKE '%underrun%' AND e.text LIKE '%input device%')
+        WHERE e.import_id=? AND e.ts>=? '''+upper+''' AND (e.call_id=? OR e.call_id IS NULL)
+        AND ((e.text LIKE '%underrun%' AND e.text LIKE '%input device%')
         OR e.text LIKE '%reported that%flow%') ORDER BY e.ts,e.id LIMIT 100001''',args)
     signals=[];count=0
     for row in cursor:
@@ -117,7 +119,13 @@ def incidents(db, perspective_id, device, offset=0, start=None, end=None):
         if count>100000: raise ValueError('Troppi eventi audio nella chiamata: massimo 100.000')
         # Never borrow events explicitly assigned to another call; line scope also checked in signal().
         if row['call_id'] is not None and row['call_id'] != p['call_id']: continue
-        s=signal(dict(row),device,p['line_id'])
+        selected=device
+        if selected is None:
+            # Discover named receiving devices from lifecycle evidence, not
+            # only periodic metrics. AWT is an observer, not an input device.
+            source=re.search(r'input device\s+(NART\d+ of Line \d+)\s*\.(?:\s|$)',row['text'].split('\n',1)[0],re.I)
+            selected=source[1] if source else 'NART0 of Line '+str(p['line_id'])
+        s=signal(dict(row),selected,p['line_id'])
         if s: signals.append(s)
     out=[]
     for episode in reconstruct(signals):

@@ -17,6 +17,8 @@ da solo tutta la qualità della rete o dell'audio.
 
 | Obiettivo | Guida |
 |---|---|
+| Interrogare i dati da un agent e salvare query generali | [Analisi libere e MCP](analytics.md) |
+| Capire identità, scarti e copie storiche | [Deduplicazione per sorgente](source-dedup.md) |
 | Confrontare due osservazioni e salvare l'analisi | [Diagnostica A/B](diagnostics.md) |
 | Capire le due direzioni e usare il ricevitore GW | [Metodo MOS](mos.md) |
 | Vedere qualità, copertura e variazioni nel tempo per zona | [Mappa qualità](geography.md) |
@@ -26,6 +28,8 @@ da solo tutta la qualità della rete o dell'audio.
 
 ## Riferimenti tecnici
 
+- [Inventario dei campi periodici recenti](periodic-metrics-inventory.md) e
+  [piano di implementazione / passaggio di chat](periodic-metrics-implementation.md).
 - [Catalogo delle metriche](metrics.md): generato da `app/catalog.py`, condiviso con UI/API.
 - [Architettura e dati](architecture.md): attribuzione, pipeline, tabelle e migrazioni.
 - [API locale](api.md): parametri, risultati e limiti.
@@ -34,6 +38,6 @@ da solo tutta la qualità della rete o dell'audio.
 - [Limiti e lavoro futuro](open-issues.md): confine tra funzioni implementate e proposte.
 - [Verifiche](validation.md): stato recente e cronologia dei collaudi.
 
-Lo schema SQLite corrente è **8**; il contratto di telemetria consigliato per i
+Lo schema SQLite corrente è **10**; il contratto di telemetria consigliato per i
 nuovi emitter è **kpe.telemetry/1.1**, con v1 ancora accettato. Sono numeri di
 versione di oggetti diversi. Il parser comunica la propria versione in `/api/health`.

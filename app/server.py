@@ -95,7 +95,7 @@ class Handler(BaseHTTPRequestHandler):
             def q(key, default=''):
                 return query.get(key,[default])[0]
             if method == 'GET' and not path.startswith('/api/'):
-                mapping = {'/':'index.html','/app.js':'app.js','/call-chart.js':'call-chart.js','/geography.js':'geography.js','/basemap.json':'basemap.json','/mos.js':'mos.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
+                mapping = {'/analytics-ui.js':'analytics-ui.js','/':'index.html','/app.js':'app.js','/call-chart.js':'call-chart.js','/geography.js':'geography.js','/basemap.json':'basemap.json','/mos.js':'mos.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
                 if path not in mapping:
                     return self.send({'error':'Non trovato'},404)
                 filename = mapping[path]
@@ -103,6 +103,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send((STATIC/filename).read_bytes(),mime=mime+'; charset=utf-8')
             db = connect()
             if method == 'GET':
+                if path.startswith('/api/analytics/'):
+                    from . import analytics
+                    handlers={'catalog':analytics.catalog,'coverage':analytics.coverage,'recipes':analytics.recipes}
+                    name=path.removeprefix('/api/analytics/')
+                    if name in handlers:return self.send(handlers[name](db))
                 if path == '/api/map-tile':
                     from .map_tiles import tile
                     return self.send(tile(q('z'),q('x'),q('y'),self.headers.get('Referer','http://127.0.0.1:8080/')),mime='image/png')
@@ -145,6 +150,7 @@ class Handler(BaseHTTPRequestHandler):
                     from .conversation_discovery import groups
                     return self.send(groups(db))
                 if path == '/api/imports':
+                    from .source_dedup import describe
                     from .conversation_discovery import profiles
                     source = profiles(db)
                     data = rows(db, '''WITH first_seen AS (
@@ -157,7 +163,7 @@ class Handler(BaseHTTPRequestHandler):
                         COALESCE(c.new_call_count,0) new_call_count,
                         COALESCE(c.call_count-c.new_call_count,0) existing_call_count
                     FROM imports i LEFT JOIN counts c ON c.import_id=i.id ORDER BY i.id DESC''')
-                    return self.send([dict(r,source_profile=source.get(r['id'],{})) for r in data])
+                    return self.send([dict(r,source_profile=source.get(r['id'],{}),producer=describe(db,r['id'])) for r in data])
                 if path == '/api/files':
                     return self.send(rows(db,'SELECT f.*,i.label FROM files f JOIN imports i ON i.id=f.import_id ORDER BY f.import_id,f.name'))
                 if path == '/api/calls':
@@ -217,11 +223,14 @@ class Handler(BaseHTTPRequestHandler):
                     if not ids or len(ids)>20: raise ValueError('Seleziona da 1 a 20 chiamate')
                     return self.send(metric_options(db,ids,catalog(db)))
                 if path == '/api/metrics':
+                    from .source_dedup import filter_duplicates
                     ids = [int(x) for x in q('calls').split(',') if x]
                     if not ids or len(ids)>20:
                         raise ValueError('Seleziona da 1 a 20 chiamate')
                     where = f"m.call_id IN ({','.join('?' for _ in ids)}) AND m.name=? AND m.statistic=?"
                     args = [*ids,q('name','rtcp.rtt'),q('statistic','sample')]
+                    if q('duplicates') != '1':
+                        where += ' AND m.perspective_id NOT IN (SELECT perspective_id FROM effective_duplicates)'
                     if q('direction'):
                         if q('direction') not in ('incoming','outgoing','roundtrip','combined'): raise ValueError('Direzione non valida')
                         where+=' AND m.direction=?'
@@ -235,6 +244,7 @@ class Handler(BaseHTTPRequestHandler):
                     if q('name') in SINGLE_DERIVED:
                         data=calculate(db,ids,q('name')) if q('statistic','sample')=='sample' else []
                         if q('direction'): data=[m for m in data if m['direction']==q('direction')]
+                        if q('duplicates') != '1': data=filter_duplicates(db,data)
                     annotate_metrics(db,data)
                     if len(data)>100000:
                         raise ValueError('Oltre 100.000 campioni: restringi la selezione')
@@ -277,6 +287,14 @@ class Handler(BaseHTTPRequestHandler):
                 with IMPORT_LOCK:
                     return self.send(ingest(db,body,name,label),201)
             obj = json.loads(body)
+            if path.startswith('/api/analytics/'):
+                from . import analytics
+                name=path.removeprefix('/api/analytics/')
+                if method=='POST' and name in ('query','evidence','run-recipe'):
+                    handler={'query':analytics.query,'evidence':analytics.evidence,'run-recipe':analytics.run_recipe}[name]
+                    return self.send(handler(db,obj))
+                if method in ('POST','PATCH') and name=='recipes':
+                    return self.send(analytics.save_recipe(db,obj,update=method=='PATCH'),201 if method=='POST' else 200)
             if method=='POST' and path=='/api/topology':
                 with IMPORT_LOCK:
                     return self.send(topology_save(db,obj))

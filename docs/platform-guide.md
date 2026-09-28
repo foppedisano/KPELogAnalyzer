@@ -36,22 +36,26 @@ successivi fallisce. Non vengono estratti file in cartelle arbitrarie.
 | Livello | Regola |
 |---|---|
 | Stesso ZIP byte per byte | SHA-256 già noto: nessuna nuova importazione. |
-| Stesso Call-ID in ZIP diversi | Stessa chiamata globale, prospettive separate. |
+| Stesso Call-ID da produttori diversi | Stessa chiamata globale, prospettive separate. |
 | Rotazioni di log nello stesso ZIP | Le metriche duplicate secondo le chiavi dell'estrattore non moltiplicano le osservazioni; gli eventi restano consultabili. |
-| Export tradizionali diversi dello stesso telefono | Possono contenere gli stessi campioni in prospettive diverse. Non vengono fusi sulla base di orari o numeri telefonici. |
+| Export tradizionali dello stesso produttore riconosciuto | Le chiamate già presenti vengono ignorate; identità incerta: import conservato. [Criteri](source-dedup.md). |
 | Telemetria strutturata | Chiave stabile source_id/event_id tra ZIP; le copie aggiungono evidenza. Contenuti discordanti con lo stesso ID invalidano le derivazioni coinvolte. |
 | Mappa | Deduplicazione delle evidenze riconosciute e unione del tempo sovrapposto, secondo il metodo geografico. Non è una deduplicazione generale di qualunque formato. |
 
 In **Sorgenti e copertura**:
 
-- **Chiamate distinte**: quante chiamate sono rappresentate da quello ZIP.
+- **Chiamate distinte**: quante chiamate sono conservate come prospettive da quello ZIP.
+- **Chiamate ignorate**: già presenti dalla stessa sorgente riconosciuta.
+- **Copie storiche**: prospettive ripetute già nel DB, conservate ma escluse dal grafico normale.
 - **Nuove nel DB**: chiamate la cui prima importazione è quella sorgente.
 - **Già presenti**: chiamate osservate anche in un'importazione precedente.
 
 Sono conteggi ricostruiti dalle prospettive attuali, incluse finestre manuali.
 Esempio: il primo export contiene 20 chiamate; quello del giorno dopo ne contiene
-25, di cui 20 con Call-ID già noto. La seconda sorgente mostra 25 distinte,
-5 nuove e 20 già presenti. Non sommare le 20 e le 25 per stimare le chiamate globali.
+25, di cui 20 già importate dallo stesso produttore riconosciuto. La seconda
+importazione mostra 5 distinte, 5 nuove e 20 ignorate. Se invece la sorgente è
+diversa o non identificabile, conserva 25 prospettive: 5 nuove e 20 già presenti
+globalmente. Non sommare i conteggi degli ZIP per stimare le chiamate globali.
 
 ## Come si attribuiscono i campioni
 

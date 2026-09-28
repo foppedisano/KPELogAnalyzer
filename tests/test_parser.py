@@ -120,10 +120,32 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(rs[0][1],'2026-01-01 12:00:01.123000')
 
     def test_unsafe_and_malformed_zip_rejected_atomically(self):
-        for data in [b'not zip',archive({'../evil.log':'x'}),archive({'C:/evil.log':'x'})]:
+        for data in [b'not zip'] + [archive({'safe.log': 'synthetic', name: 'x'}) for name in (
+            '../evil.log', 'C:/evil.log', 'C:evil.log', '/evil.log',
+            '..\\evil.log', '\\\\server\\share\\evil.log', 'safe.log:stream.log',
+            '../kpelog-2025-01-27T17:06:17.txt',
+            'C:/kpelog-2025-01-27T17:06:17.txt',
+            'folder:stream/kpelog-2025-01-27T17:06:17.txt',
+            'kpelog-2025-01-27T17:06:17.txt:stream.log',
+        )]:
             with self.assertRaises(ValueError):
                 ingest(self.db,data,'bad.zip')
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM imports').fetchone()[0],0)
+
+    def test_android_timestamped_rotation_names_preserve_provenance(self):
+        files = {
+            'kpelog-2025-01-27T17:06:17.txt': '2025-01-27 17:06:17 synthetic rotation',
+            'logs/ctilib-2025-01-27T16:12:22.log': 'synthetic fragment',
+        }
+        data = archive(files)
+        contents, warnings = read_zip(data)
+        self.assertEqual({name: text for name, size, text in contents}, files)
+        self.assertEqual(warnings, [])
+        result = ingest(self.db, data, 'synthetic.zip')
+        evidence = rows(self.db, 'SELECT f.name,e.line_no,e.text FROM events e JOIN files f ON f.id=e.file_id')
+        self.assertEqual({r['name']: r['text'] for r in evidence}, files)
+        self.assertTrue(all(r['line_no'] == 1 for r in evidence))
+        self.assertEqual(ingest(self.db, data, 'synthetic.zip')['id'], result['id'])
 
     def test_query_read_only_and_limit(self):
         self.load()

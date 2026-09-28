@@ -2,7 +2,7 @@
 
 [Indice](README.md) · [Modello dei dati](architecture.md)
 
-Riferimento del servizio attuale, schema 8. Le sezioni con numeri di schema
+Riferimento del servizio attuale, schema 10. Le sezioni con numeri di schema
 indicano l’introduzione della funzione, non endpoint separati per versione.
 Il servizio è per analisi locale: non espone ancora previsioni o piani operativi.
 
@@ -148,3 +148,19 @@ campioni nella chiamata. I CSV rimangono separati e indipendenti da zoom/visibil
 conserva quella del dato. Nei dati strutturati `clock_domain=UTC` distingue
 l'orologio dichiarato dal tempo legacy senza fuso. Non applicare arbitrariamente
 conversioni locali ai timestamp originali.
+
+## Identità e deduplicazione per sorgente
+
+[Contratto completo e migrazione schema 9](source-dedup.md). `/api/imports`
+include `producer`; `/api/perspectives` include `duplicate_of`. Il grafico e
+`/api/metrics` escludono le copie storiche riconosciute: `duplicates=1` le
+include, anche in CSV. Il risultato di un nuovo import distingue `skipped_calls`
+e `skipped_events` dai record conservati.
+
+## API analitiche e MCP
+
+`GET /api/analytics/catalog`, `/coverage`, `/recipes`; `POST /api/analytics/query`,
+`/evidence`, `/run-recipe`; `POST/PATCH /api/analytics/recipes`.
+Le query generali operano sulle viste `a_*`, con parametri, scope, MOS opzionale,
+limiti e provenienza. Il server MCP usa queste stesse API.
+[Contratto completo, esempi e semantica](analytics.md).

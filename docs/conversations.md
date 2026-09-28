@@ -76,3 +76,9 @@ Se disponi dei log xcoder, importa ciascun set separatamente. Un UUID condiviso
 può collegarlo automaticamente; altrimenti usa una sessione esplicita con tutte
 le osservazioni. Il parser xcoder resta da verificare su log reali: finora è stata
 assunta la compatibilità VDK, come documentato nelle open issues del progetto.
+
+## Zoom dei grafici
+
+La rotella scorre la pagina. **Ctrl + rotella** modifica lo zoom temporale
+intorno al puntatore; **− / +** agiscono al centro. **Mostra tutto l’intervallo**
+ripristina il periodo completo. Il comportamento è condiviso con Diagnostica A/B.

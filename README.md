@@ -23,6 +23,12 @@ separa guide operative, metodo MOS, mappa, API e contratto per gli sviluppatori 
 3. Il dettaglio parte dal MOS downstream: **Aggiungi metriche** sovrappone i parametri scelti.
 4. Verifica le evidenze, confronta i ricevitori e consulta la mappa dove esistono posizioni utilizzabili.
 
+## Analisi conversazionali
+
+La sezione **Analisi libere** e il server **MCP stdio** espongono un catalogo
+semantico e query componibili: episodi MOS, medie pesate, copertura, ricevitori e
+contesto rete, con evidenze e ricette versionate. [Configurazione e guida](docs/analytics.md).
+
 ## Android e conversazioni
 
 Gli ZIP iOS e Android osservati usano lo stesso flusso di importazione. La vista **Conversazioni** collega le tratte tramite X-Call-UUID quando presente, mantiene visibili esiti e prove, e permette il confronto di app e gateway. [Guida, criteri e limiti](docs/conversations.md).
@@ -48,6 +54,7 @@ I dati persistono nel volume `kpe-data`, anche dopo `down`. Per una porta divers
 ## Cosa puoi fare
 
 - Importare ZIP, anche con log ruotati, senza duplicare un archivio identico (SHA-256).
+- Ignorare chiamate già importate dalla stessa app riconosciuta, mantenendo le altre prospettive ([identità e deduplicazione](docs/source-dedup.md)).
 - Sfogliare le chiamate, cercare interlocutori e Call-ID, vedere connessione, terminazione, direzione e stato osservato.
 - Confrontare più chiamate e più sorgenti con grafici interattivi, zoom, tooltip, selezione delle serie e CSV.
 - Analizzare RTT, jitter, perdita pacchetti e contatori RTCP; statistiche KPE `last/avg/min/max`; ping ICMP.

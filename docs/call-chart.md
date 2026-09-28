@@ -10,8 +10,10 @@ in millisecondi. Unità diverse hanno pannelli con tempo, zoom e cursore comuni.
 Le metriche raw hanno pannelli separati perché la loro unità non è documentata.
 Sorgenti, flussi, device e SSRC mantengono serie distinte.
 
-La rotella ingrandisce intorno al puntatore; **Ripristina zoom** torna alla
-copertura completa. L'allineamento assoluto usa le correzioni delle sorgenti,
+La rotella normale scorre la pagina, anche sopra il grafico. **Ctrl + rotella**
+ingrandisce intorno al puntatore. I pulsanti **− / +** cambiano lo zoom al centro
+della finestra; **Mostra tutta la chiamata** torna alla copertura completa.
+Tutti i pannelli mantengono lo stesso intervallo temporale. L'allineamento assoluto usa le correzioni delle sorgenti,
 quello relativo usa l'inizio della prospettiva, come nel confronto preesistente.
 Le linee si interrompono oltre 30 secondi senza dati. Gli eventi sono punti
 isolati; MOS e altri intervalli espliciti terminano alla loro scadenza.
@@ -28,3 +30,10 @@ zoom. La media dei campioni è aritmetica; la media MOS del registro chiamate
 rimane pesata sulla durata. La selezione è locale alla vista e non viene salvata.
 
 Verifica opzionale delle scale: `node --test tests/test_chart_scale.js`.
+
+## Copie dello stesso export
+
+Il grafico esclude per default le prospettive storiche riconosciute come copie
+della stessa sorgente/Call-ID. **Mostra copie storiche della stessa sorgente**
+le include anche nei CSV. Le serie di produttori e SSRC diversi restano separate.
+[Regole ed evidenze di identificazione](source-dedup.md).

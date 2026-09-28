@@ -64,7 +64,7 @@ def connect(db_path=None):
 def init(db):
     db.executescript(SCHEMA)
     version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-    if version not in ('1', '2', '3', '4', '5', '6', '7', '8'):
+    if version not in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10'):
         raise RuntimeError('Unsupported database schema; back up the database before upgrading')
     if version == '1':
         filename = db.execute('PRAGMA database_list').fetchone()[2]
@@ -198,6 +198,42 @@ def init(db):
         except Exception:
             db.rollback()
             raise
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '8':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT COUNT(*) FROM imports').fetchone()[0]:
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v9.bak')
+            if backup.exists():
+                raise RuntimeError(f'Backup already exists: {backup}; preserve or rename before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        from .source_dedup import SCHEMA as SOURCE_SCHEMA
+        try:
+            db.executescript("BEGIN IMMEDIATE;" + SOURCE_SCHEMA + "UPDATE meta SET value='9' WHERE key='schema_version'; COMMIT;")
+        except Exception:
+            db.rollback()
+            raise
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '9':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT COUNT(*) FROM imports').fetchone()[0]:
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v10.bak')
+            if backup.exists():
+                raise RuntimeError(f'Backup already exists: {backup}; preserve or rename before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        from .analytics import SCHEMA as ANALYTICS_SCHEMA
+        try:
+            db.executescript("BEGIN IMMEDIATE;" + ANALYTICS_SCHEMA + "UPDATE meta SET value='10' WHERE key='schema_version'; COMMIT;")
+        except Exception:
+            db.rollback()
+            raise
     from .enrichment import enrich_pending
     enrich_pending(db)
     from .geography import pending
@@ -206,6 +242,8 @@ def init(db):
     mobility_pending(db)
     from .telemetry_store import pending as telemetry_pending
     telemetry_pending(db)
+    from .source_dedup import pending as source_pending
+    source_pending(db)
 
 
 def rows(db, sql, args=()):

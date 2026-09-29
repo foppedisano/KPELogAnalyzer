@@ -61,6 +61,8 @@ class WorkspaceTests(unittest.TestCase):
   self.load({'VDlog.txt':vd(5)})
   before=self.db.execute('SELECT COUNT(*) FROM metrics').fetchone()[0]
   with self.db:
+   from tests.fixtures import remove_periodic_schema
+   remove_periodic_schema(self.db)
    for table in ['source_profiles','call_correlations','leg_outcomes','saved_analyses','source_identities','window_revisions','observation_roles']:self.db.execute('DROP TABLE '+table)
    self.db.execute("UPDATE meta SET value='2' WHERE key='schema_version'")
   init(self.db)

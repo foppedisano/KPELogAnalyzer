@@ -8,7 +8,7 @@ function chartScale(values, unit) {
   const raw = (high - low || 1) / 4;
   const base = 10 ** Math.floor(Math.log10(raw));
   let step = [1, 2, 5, 10].map(n => n * base).find(n => n >= raw);
-  if (unit === 'packets') step = Math.max(1, Math.ceil(step));
+  if (['packets','count','samples','bytes','chunks'].includes(unit)) step = Math.max(1, Math.ceil(step));
   low = Math.floor(low / step) * step;
   high = Math.max(low + step, Math.ceil(high / step) * step);
   const ticks = [];
@@ -53,8 +53,8 @@ async function mountMultiChart(root, ids, initialMetric) {
     const [name, direction = ''] = value.split('|');
     return new URLSearchParams({calls: ids.join(','), name, direction, statistic: stat, invalid: $('.chart-invalid', root).checked ? '1' : '0', duplicates: $('.chart-duplicates', root).checked ? '1' : '0'});
   }
-  const seriesKey = p => JSON.stringify([p.name,p.statistic,p.call_id,p.perspective_id,p.direction,p.flow,p.ssrc,p.device,p.sample_kind,p.observer]);
-  const seriesLabel = p => `${p.name} · ${p.statistic || ''} · #${p.call_id} · P${p.perspective_id} · ${p.label} · ${p.measurement_context?.label || p.direction || ''}${p.flow ? ' · flusso '+p.flow : ''}${p.ssrc ? ' · SSRC '+p.ssrc : ''}${p.device ? ' · '+p.device : ''}`;
+  const seriesKey = p => JSON.stringify([p.name,p.statistic,p.call_id,p.perspective_id,p.direction,p.flow,p.ssrc,p.device,p.sample_kind,p.observer,p.output_device,p.input_device,p.lifecycle]);
+  const seriesLabel = p => `${p.name} · ${p.statistic || ''} · #${p.call_id} · P${p.perspective_id} · ${p.label} · ${p.measurement_context?.label || p.direction || ''}${p.flow ? ' · flusso '+p.flow : ''}${p.ssrc ? ' · SSRC '+p.ssrc : ''}${p.device ? ' · '+p.device : ''}${p.observer ? ' · '+p.observer : ''}${p.output_device ? ' · output '+p.output_device : ''}${p.input_device ? ' · input '+p.input_device : ''}${p.lifecycle ? ' · ciclo '+p.lifecycle : ''}`;
   const xvalue = p => $('.chart-axis', root).value === 'absolute' ? timeValue(p.ts) + (p.clock_offset || 0) * 1000 : timeValue(p.ts) - timeValue(p.start);
   const end = p => p.valid_until ? xvalue(p) + timeValue(p.valid_until) - timeValue(p.ts) : xvalue(p);
   let series = [], panels = [];

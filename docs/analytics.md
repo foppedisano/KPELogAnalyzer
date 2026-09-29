@@ -273,3 +273,41 @@ dipendenza della piattaforma. Accetta una singola serie completa. Nella UI
 Analisi attivare «Calcola episodi audio e finestre» e selezionare la chiamata.
 Dopo l'aggiornamento del server riaprire la sessione MCP del client perché
 ricarichi il catalogo e lo schema degli strumenti.
+
+
+## Metriche periodiche: schema 11 / analytics-2
+
+`a_metrics` e `/api/metrics` includono `observer`, `output_device`,
+`input_device`, `lifecycle`, originali `raw_value/raw_unit` e riga esatta.
+`a_periodic_metadata` conserva `value_json` tipizzato e provenienza. Le
+osservazioni non attribuite sono incluse nella copertura globale; una selezione
+per chiamata usa l’associazione della singola misura, anche nei blocchi multi-input.
+`analytics_catalog`, `analytics_coverage`, `analytics_query` e
+`analytics_evidence` espongono gli stessi dati tramite MCP, con i limiti e
+l’authorizer esistenti. Il testo integrale dei log resta escluso.
+
+Esempio SQL, con parametro `metric = vd.silence_played` e scope esplicito:
+
+```sql
+SELECT observer, output_device, input_device, lifecycle, interval_start,
+       ts, status, delta, unit, previous_event_id, event_id,
+       previous_line_no, line_no
+FROM a_counter_intervals WHERE name=:metric ORDER BY ts,id
+```
+
+Gli stati initial/reset/invalid/conflict/gap producono delta NULL. Non sommare
+contatori cumulativi né attribuire i delta a secondi specifici. Con
+`datasets: ["incidents"]`, `a_counter_incident_matches` espone ciascun episodio
+sovrapposto al periodo del contatore con osservatore/input esatti e ID delle
+prove; non somma durate e non dichiara equivalenza. Gli episodi aperti senza
+collocazione non generano match. Un match temporale non prova causalità.
+Le vecchie ricette analytics-1 sono accettate senza modificare le revisioni;
+il risultato dichiara la versione corrente. Riconnettere il client MCP.
+
+## Contratto semantico del media plane
+
+`GET /api/media-semantics` restituisce `version`, `basis`, `devices` (nome, classe padre, denominazione, ruolo), `rules` e `context`. Lo stesso oggetto è `media_plane` in `/api/analytics/catalog` e nello strumento MCP `analytics_catalog`. Il catalogo `/api/catalog` mantiene la forma di lista e aggiunge `semantics` a ogni metrica: `domain`, `domain_label`, `scope`, `interpretation`.
+
+Gli ambiti distinguono scheduling, trasporto RTP, buffer/media, elaborazione/I/O, sonde di rete e modelli di qualità; `unspecified` segnala semantica non confermata. Non sono classificazioni della causa di un guasto né tipi del device. Leggere anche `meaning`, `source`, `kind`, `unit`, `limits` e il contesto della singola osservazione. [Gerarchia completa](media-plane.md). Gli episodi conservano il nome osservato del VD: non viene più sostituito con «Registrazione VD», che deduceva una destinazione non garantita. Non cambiano dati archiviati o ID.
+
+Esempio di richiesta MCP: «Distingui per questa chiamata scheduling dei thread, ricezione RTP e conseguenze sul media; separa VID/VOD e osservatori, indicando copertura ed evidenze, senza attribuire automaticamente gli underrun alla rete». Riconnettere il client per rileggere le istruzioni e il catalogo.

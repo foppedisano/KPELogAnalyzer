@@ -38,6 +38,10 @@ da solo tutta la qualità della rete o dell'audio.
 - [Limiti e lavoro futuro](open-issues.md): confine tra funzioni implementate e proposte.
 - [Verifiche](validation.md): stato recente e cronologia dei collaudi.
 
-Lo schema SQLite corrente è **10**; il contratto di telemetria consigliato per i
+Lo schema SQLite corrente è **11**; il contratto di telemetria consigliato per i
 nuovi emitter è **kpe.telemetry/1.1**, con v1 ancora accettato. Sono numeri di
 versione di oggetti diversi. Il parser comunica la propria versione in `/api/health`.
+
+## Media plane e terminologia
+
+La [guida al media plane VDK](media-plane.md) distingue VID/VOD, le specializzazioni audio e le connessioni molti-a-molti. Ogni VD opera nel proprio thread: separare scheduling locale, statistiche di ricezione RTP e conseguenze sul media. Il catalogo delle metriche e la guida in linea espongono lo stesso ambito semantico.

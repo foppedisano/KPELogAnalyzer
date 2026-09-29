@@ -8,7 +8,10 @@ def archive(files):
     out = io.BytesIO()
     with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
         for name, text in files.items():
-            z.writestr(name, text)
+            # Stable fixture bytes: ZIP wall-clock timestamps otherwise make
+            # duplicate-import tests depend on crossing a two-second boundary.
+            z.writestr(zipfile.ZipInfo(name,date_time=(2020,1,1,0,0,0)),text,
+                       compress_type=zipfile.ZIP_DEFLATED)
     return out.getvalue()
 
 
@@ -54,3 +57,14 @@ def sample(cid='call-a',direction='OUTGOING'):
         'rtplog.txt': rtcp(),
         'CallInfo.log': '2026-01-01 12:00:10.0000 [info] [1] : call flow metric line (0): '+json.dumps({'incoming':{'common':{'rtt':{'last':'42250','avg':'N/A','min':'NaN','max':'Infinity'}}}})+'\n',
     }
+
+
+def remove_periodic_schema(db):
+    """Only synthetic upgrade fixtures: restore the pre-11 table shape."""
+    db.execute('DROP TABLE periodic_evidence')
+    db.execute('DROP TABLE periodic_metadata')
+    db.execute('DROP INDEX metric_event')
+    db.execute('DROP INDEX metric_perspective')
+    for column in ('observer','output_device','input_device','lifecycle'):
+        db.execute('ALTER TABLE metrics DROP COLUMN '+column)
+    db.execute("DELETE FROM meta WHERE key LIKE 'periodic-1:%'")

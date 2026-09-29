@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
 
-PARSER_VERSION = '1.11.0'
+PARSER_VERSION = '1.12.0'
 MAX_ZIP = 64 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 MAX_FILE = 40 * 1024 * 1024
@@ -120,19 +120,28 @@ def metrics(record):
         flow = re.search(r'FLOW\s+(\d+)', text)
         ssrc = re.search(r'SSRC of this source:\s*(\w+)', text)
         patterns = [
-            ('rtcp.loss', r'Packet loss we perceive from this source \(since last report\):\s*([-\d.]+)%', '%', 'incoming'),
-            ('rtcp.jitter', r'Jitter we perceive from this source \(since last report\):\s*([-\d.]+) ms', 'ms', 'incoming'),
-            ('rtcp.rtt', r'RTT to this source:\s*([-\d.]+) ms', 'ms', 'roundtrip'),
-            ('rtcp.loss', r'Receiver Report - remote peer pkt loss \(since last RR\):\s*([-\d.]+)%', '%', 'outgoing'),
-            ('rtcp.jitter', r'Receiver Report - jitter perceived by this remote peer\(since last report\):\s*([-\d.]+) ms', 'ms', 'outgoing'),
-            ('rtcp.packets_received', r'Packet we received from this source \(total\):\s*(\d+)', 'packets', 'incoming'),
+            ('rtcp.loss', r'Packet loss we perceive from this source \(since last report\):\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)%', '%', 'incoming'),
+            ('rtcp.jitter', r'Jitter we perceive from this source \(since last report\):\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?) ms', 'ms', 'incoming'),
+            ('rtcp.rtt', r'RTT to this source:\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?) ms', 'ms', 'roundtrip'),
+            ('rtcp.loss', r'Receiver Report - remote peer pkt loss \(since last RR\):\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)%', '%', 'outgoing'),
+            ('rtcp.jitter', r'Receiver Report - jitter perceived by this remote peer\(since last report\):\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?) ms', 'ms', 'outgoing'),
+            ('rtcp.packets_received', r'Packet we received from this source \(total\):\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(?![\w]|\.\d)', 'packets', 'incoming'),
         ]
+        from .periodic import NUMBER, NUMBER_END
+        for label, name, direction in [
+            ('Sender Report - Number of packets sent by this remote peer (total)', 'rtcp.packets_sent_total', 'incoming'),
+            ('Sender Report - Number of packets sent by this remote peer (since last report)', 'rtcp.packets_sent_interval', 'incoming'),
+            ('Packet we received from this source (since last report)', 'rtcp.packets_received_interval', 'incoming'),
+            ('Receiver Report - pkt lost by this peer (total)', 'rtcp.packets_lost_total', 'outgoing'),
+            ('Receiver Report - pkt lost by this peer (since last report)', 'rtcp.packets_lost_interval', 'outgoing'),
+        ]:
+            patterns.append((name, re.escape(label)+r':\s*('+NUMBER+r')'+NUMBER_END, 'packets', direction))
         for name, pattern, unit, direction in patterns:
             m = re.search(pattern, text)
             if m:
                 value = float(m[1])
                 if math.isfinite(value):
-                    yield name, value, unit, direction, flow[1] if flow else '?', ssrc[1] if ssrc else '', 'sample', int(value >= 0 and (unit != '%' or value <= 100))
+                    yield name, value, unit, direction, flow[1] if flow else '?', ssrc[1] if ssrc else '', 'sample', int(value >= 0 and (unit != '%' or value <= 100) and (unit != 'packets' or value.is_integer()))
     if kind == 'callinfo':
         m = re.search(r'received \d+ bytes .*?time=([\d.]+) ms', text)
         if m:

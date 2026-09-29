@@ -20,7 +20,7 @@ In **File e finestre manuali → Modifica una finestra manuale**, seleziona la f
 
 ## Upgrade storico dalla versione iniziale
 
-Questa sezione descrive il passaggio 1→2; la versione attuale arriva a schema 10
+Questa sezione descrive il passaggio 1→2; la versione attuale arriva a schema 11
 attraverso le migrazioni successive. Vedi [architettura](architecture.md) e
 [aggiornamento e backup](getting-started.md#arresto-aggiornamento-e-backup).
 
@@ -75,7 +75,7 @@ Il primo avvio crea `kpe.sqlite3.pre-v3.bak` nel volume dati, poi aggiunge le ta
 
 ## Underrun e media missing: fasce degli episodi
 
-Sotto le curve della diagnostica sono disponibili fasce temporali con lo stesso asse X e lo stesso zoom. Arancio indica buffer underrun; rosso indica media missing. Le righe distinguono A/B e osservatore (uscita audio AWT, registrazione VD, flow RTP). Il tooltip mostra durata, stato ed eventi di prova. La tabella **Episodi di underrun e media missing** permette di consultare inizio/fine, durata e provenienza; i primi 300 episodi sono elencati, tutti sono inclusi nel JSON esportato.
+Sotto le curve della diagnostica sono disponibili fasce temporali con lo stesso asse X e lo stesso zoom. Arancio indica buffer underrun; rosso indica media missing. Le righe distinguono A/B e osservatore (uscita audio AWT, nome VD osservato, senza destinazione dedotta, flow RTP). Il tooltip mostra durata, stato ed eventi di prova. La tabella **Episodi di underrun e media missing** permette di consultare inizio/fine, durata e provenienza; i primi 300 episodi sono elencati, tutti sono inclusi nel JSON esportato.
 
 - Underrun: la durata `Event was … msecs long` è riportata come **dichiarata**. Può differire dal tempo fra i messaggi di inizio e fine, che è mostrato separatamente. Se manca l’inizio ma la fine dichiara la durata, si ricava una posizione iniziale e la si etichetta come non osservata.
 - `Still in buffer underrun … Event is currently …` consente di mostrare almeno la durata già trascorsa. Senza messaggio terminale l’episodio resta **senza chiusura**: la barra si ferma all’ultima evidenza, non alla fine della chiamata.
@@ -134,3 +134,9 @@ Una sorgente senza ruolo dichiarato è trattata come app presunta, esplicitament
 
 Usare la vista dedicata **MOS e ricezione**, oppure il parametro MOS a profilo
 fisso in chiamata e Confronta. [Metodo e selezione esplicita del GW](mos.md).
+
+Aggiornamento periodico schema 11: [migrazione, backup e recupero](periodic-metrics-implementation.md#backup-e-ritorno-alla-versione-precedente).
+
+## Scheduling, RTP e device
+
+Consultare il [media plane VDK](media-plane.md) per la gerarchia. Ogni VD opera nel proprio thread: ritardi di scheduling e cicli descrivono la temporizzazione locale. Le statistiche NART specifiche dei pacchetti descrivono invece la ricezione RTP. Underrun e silenzio riprodotto sono conseguenze sulla disponibilità del media; da soli non distinguono una causa di rete da una locale. Conservare ciascuna relazione VID/VOD: un VOD può miscelare più input.

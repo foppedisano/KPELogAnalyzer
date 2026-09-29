@@ -83,6 +83,8 @@ def enrich_import(db, iid):
     enrich(db,iid)
     from .conversation_discovery import enrich as discover
     discover(db,iid)
+    from .periodic import enrich as periodic
+    periodic(db, iid)
     return added
 
 
@@ -97,3 +99,5 @@ def enrich_pending(db):
             marker = db.execute('SELECT value FROM meta WHERE key=?', (f'enrichment:{iid}',)).fetchone()
             if not marker or marker[0] != VERSION:
                 enrich_import(db, iid)
+            from .periodic import enrich as periodic
+            periodic(db, iid)

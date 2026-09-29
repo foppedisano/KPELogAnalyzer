@@ -2,7 +2,8 @@
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from app.catalog import CATALOG
+from app.catalog import CATALOG, PERIODIC_METADATA
+from app.media_semantics import markdown
 header='''# Catalogo delle metriche
 
 Questa guida è generata da `app/catalog.py`, la stessa fonte usata da **Guida alle metriche** nell’interfaccia e da `GET /api/catalog`. Rigenerazione: `python scripts/build_metric_docs.py`.
@@ -14,7 +15,7 @@ Le schede sotto sono il riferimento tecnico; il metodo MOS completo è in [mos.m
 ## Regole comuni
 
 - **Prospettiva**: osservazione di una chiamata in una sorgente importata. Non identifica permanentemente un telefono: due export dello stesso dispositivo possono duplicarsi.
-- **Downstream / upstream**: rispetto all’app. Incoming RTCP e VD descrivono la ricezione locale (downstream); jitter/loss dei Receiver Report outgoing descrivono la ricezione del peer/GW (upstream). RTT e ping sono bidirezionali. Per xcoder o tratta ignota si mantengono ricezione locale/del peer, senza inversione automatica. Sorgenti senza ruolo dichiarato: app presunta, non identità verificata.
+- **Downstream / upstream**: rispetto all’app. Incoming RTCP descrive la ricezione locale (downstream); VD non determina da solo una direzione; jitter/loss dei Receiver Report outgoing descrivono la ricezione del peer/GW (upstream). RTT e ping sono bidirezionali. Per xcoder o tratta ignota si mantengono ricezione locale/del peer, senza inversione automatica. Sorgenti senza ruolo dichiarato: app presunta, non identità verificata.
 - **Flow / SSRC / device**: restano distinti; non aggregare flussi o destinatari diversi. Il device selezionato nella diagnostica filtra le metriche VD; RTT mostra separatamente tutti i flow/SSRC attribuiti alla prospettiva.
 - **sample / gauge**: osservazione al timestamp. **event**: aggiornamento esplicito, senza interpolazione. **counter**: contatore cumulativo soggetto a reset. **interval**: valore riferito a un intervallo (delta oppure finestra esplicita). **step**: valore mantenuto fino a una scadenza dichiarata; il MOS legacy usa questa rappresentazione.
 - **last / avg / min / max**: statistiche riportate da KPE, non calcolate dall’analizzatore. Non è nota automaticamente la loro finestra temporale. La media nelle tabelle RTCP è aritmetica sui campioni, non pesata per durata o pacchetti.
@@ -24,12 +25,23 @@ Le schede sotto sono il riferimento tecnico; il metodo MOS completo è in [mos.m
 - **Orologio**: timestamp originali invariati, senza fuso dedotto. L’offset della sorgente, in secondi, si somma solo per allineamento nei grafici e derivazioni diagnostiche. Un offset positivo sposta la sorgente in avanti.
 - **Deduplicazione**: osservazioni nuove identiche per sorgente, timestamp, metrica, device, linea, flow, SSRC, valore e tipo sono contate una sola volta. Per i log tradizionali si ignorano le chiamate già presenti quando il produttore è riconosciuto con prove locali concordanti; le copie storiche restano consultabili. Vedi [identità della sorgente](source-dedup.md). La telemetria strutturata deduplica source_id/event_id tra ZIP; la mappa ha regole proprie di unione delle evidenze sovrapposte. Vedi [logica della piattaforma](platform-guide.md).
 
+## Osservazioni periodiche recenti
+
+Schema 11: osservatore, output, input e ciclo di vita sono dimensioni separate.
+I contatori per VOD descrivono il rapporto lettore/input. `a_counter_intervals`
+restituisce entrambi gli eventi, reset, invalidità, conflitti e gap oltre 30 s.
+I delta non localizzano il silenzio dentro l’intervallo e non si sommano agli
+Episodi. I clock e stati sono in `periodic_metadata`, non nelle curve numeriche.
+I dati senza associazione univoca rimangono non attribuiti. Copertura e metadati
+sono disponibili anche tramite API analitiche e MCP.
+
 ## Schede
 
 '''
-parts=[header]
+parts=[header.replace("## Schede", markdown()+"## Schede")]
 for e in CATALOG:
- parts.append(f"### {e['title']} — `{e['name']}`\n\n**Unità:** {e['unit']}. **Tipo:** {e['kind']}.\n\n{e['meaning']}\n\n**Origine e calcolo:** {e['source']}.\n\n**Limiti:** {e['limits']}\n\n")
+ parts.append(f"### {e['title']} — `{e['name']}`\n\n**Unità:** {e['unit']}. **Tipo:** {e['kind']}.\n\n{e['meaning'].strip()}\n\n**Ambito:** {e['semantics']['domain_label']}. {e['semantics']['scope']}\n\n**Origine e calcolo:** {e['source']}.\n\n**Limiti:** {e['limits']}\n\n")
+parts.append('## Stati e metadati periodici\n\n'+''.join(f"- `{m['name']}` ({m['type']}): {m['meaning']}\n" for m in PERIODIC_METADATA)+'\n')
 parts.append('''## Lettura del grafico e dei momenti critici
 
 Nel dettaglio chiamata e in Confronta, **Aggiungi metriche** seleziona più parametri.
@@ -56,6 +68,6 @@ Si usa l’ultimo evento `KPE setAppInfo configured with name=…, version=…` 
 - [RFC 3550, sezione 6.4.1](https://www.rfc-editor.org/rfc/rfc3550.html#section-6.4.1): report RTCP e calcolo RTT.
 - [RFC 3611, sezione 4.7.3](https://www.rfc-editor.org/rfc/rfc3611.html#section-4.7.3): distinzione fra ritardo di rete e ritardo degli endpoint.
 
-I nomi interni VD/KPE sono interpretati empiricamente dai log disponibili, senza una specifica proprietaria completa. Una metrica KPE non ancora descritta riceve nella UI una scheda esplicitamente non confermata; non si inventano unità o diagnosi.
+La gerarchia VD è confermata dal referente VDK. I singoli campi e le unità restano interpretati secondo le evidenze disponibili, senza una specifica proprietaria completa. Una metrica KPE non ancora descritta riceve nella UI una scheda esplicitamente non confermata; non si inventano unità o diagnosi.
 ''')
 Path('docs/metrics.md').write_text(''.join(parts),encoding='utf-8')

@@ -53,7 +53,7 @@ Le derivazioni sono escluse quando mancano unità, identità o riferimenti affid
 
 ### Migrazioni
 
-Lo schema corrente è **10**. Le migrazioni successive preservano ID grezzi e
+Lo schema corrente è **11**. Le migrazioni successive preservano ID grezzi e
 annotazioni. Su DB popolati producono backup consistenti pre-vN; un backup
 omonimo non viene sovrascritto. Servono spazio per backup e arricchimenti.
 Le istruzioni sotto sulle singole versioni descrivono la storia dello schema;
@@ -77,7 +77,7 @@ un DB aperto. [Procedura operativa](getting-started.md).
 
 ## Riferimento tecnico dettagliato
 
-## Modello base dei dati (schema 10)
+## Modello base dei dati (schema 11)
 
 | Table | Meaning | Relations |
 |---|---|---|
@@ -199,7 +199,7 @@ Conflicting stable IDs retract dependent products. Legacy extractors remain sepa
 Schema 8 adds telemetry_records, telemetry_evidence, telemetry_intervals and
 telemetry_geo_context with a pre-upgrade backup. See [rules, bounds and upgrade](telemetry-integration.md).
 
-## Analisi generali — schema 10
+## Analisi generali — schema 11
 
 `analytics.py` prepara viste temporanee per richiesta dentro una lettura SQLite
 coerente, esegue SQL parametrizzato e limitato, poi annulla le strutture temporanee.
@@ -210,3 +210,12 @@ alle API HTTP locali; non replica formule e non apre il database direttamente.
 `analysis_recipes` e `analysis_recipe_revisions` conservano configurazioni e
 storico con controllo della revisione. La migrazione 9→10 crea il backup
 `.pre-v10.bak`, preservando log e ID. [Semantica e limiti](analytics.md).
+
+Aggiornamento periodico schema 11: [migrazione, backup e recupero](periodic-metrics-implementation.md#backup-e-ritorno-alla-versione-precedente).
+
+La migrazione 10→11 aggiunge le dimensioni di osservazione alle metriche,
+`periodic_metadata` per valori non scalari e `periodic_evidence` come registro
+idempotente. Gli indici per evento e prospettiva rendono il recupero e i grafici
+praticabili sul database storico. `periodic-1:<import>` marca il completamento;
+la transazione comprende osservazioni e marker. ID e annotazioni preesistenti
+rimangono invariati. I marker di arricchimento precedenti non sono incrementati.

@@ -110,3 +110,7 @@ Valori finiti non validi restano archiviati e sono normalmente esclusi; nel
 grafico della chiamata puoi abilitare **Mostra anomali** per le metriche che li
 espongono. I derivati non vengono inventati per input invalidi. I buchi temporali
 restano buchi, sia nel grafico sia nella mappa.
+
+## Media plane e terminologia
+
+La [guida al media plane VDK](media-plane.md) distingue VID/VOD, le specializzazioni audio e le connessioni molti-a-molti. Ogni VD opera nel proprio thread: separare scheduling locale, statistiche di ricezione RTP e conseguenze sul media. Il catalogo delle metriche e la guida in linea espongono lo stesso ambito semantico.

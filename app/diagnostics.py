@@ -8,7 +8,7 @@ from .db import rows
 
 
 
-NAMES = ('rtcp.rtt','vd.max_arrival_delay','vd.dejitter_target','vd.buffer','vd.silence_skipped','rtcp.jitter','rtcp.loss','vd.missing_packets')
+NAMES = ('rtcp.rtt','vd.max_arrival_delay','vd.dejitter_target','vd.buffer','vd.silence_skipped','rtcp.jitter','rtcp.loss','vd.missing_packets','vd.silence_played','vd.underruns','vd.underrun_duration')
 
 MAX_GAP = 30
 
@@ -94,7 +94,7 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
     args.append((datetime(1970,1,1)+timedelta(seconds=bound-offset)).isoformat(' ',timespec='microseconds'))
   where=' AND '+' AND '.join(conditions) if conditions else ''
   data=rows(db,f'''SELECT m.*,e.line_no,f.name filename FROM metrics m JOIN events e ON e.id=m.event_id JOIN files f ON f.id=e.file_id
-   WHERE m.perspective_id=? AND m.valid=1 AND m.statistic='sample' AND m.name IN ({','.join('?' for _ in NAMES)}) {where} ORDER BY m.ts,m.id LIMIT 100001''',args)
+   WHERE m.perspective_id=? AND (m.valid=1 OR m.name IN ('vd.silence_skipped','vd.silence_played')) AND m.statistic='sample' AND m.name IN ({','.join('?' for _ in NAMES)}) {where} ORDER BY m.ts,m.id LIMIT 100001''',args)
   if len(data)>100000: raise ValueError('Oltre 100.000 campioni per prospettiva')
 
   groups={}
@@ -107,35 +107,38 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
 
    if (lower is not None and t < lower) or (upper is not None and t > upper): continue
 
-   key=(m['name'],m['flow'],m['ssrc'],m['device'],m['sample_kind'],m['direction'],m['unit'])
+   key=(m['name'],m['flow'],m['ssrc'],m['device'],m['sample_kind'],m['direction'],m['unit'],m['observer'],m['output_device'],m['input_device'],m['lifecycle'])
 
-   groups.setdefault(key,[]).append(dict(t=t,value=m['value'],evidence=evidence(m)))
+   groups.setdefault(key,[]).append(dict(t=t,value=m['value'],valid=m['valid'],evidence=evidence(m)))
 
   observed=set()
 
-  for (name,flow,ssrc,dev,kind,direction,unit),points in groups.items():
+  for (name,flow,ssrc,dev,kind,direction,unit,observer,output_device,input_device,lifecycle),points in groups.items():
 
    observed.add(name)
 
-   item=dict(side=side,perspective_id=pid,label=p['label'],name=name,flow=flow,ssrc=ssrc,device=dev,kind=kind,points=points,direction=direction,unit=unit)
+   valid_points=[point for point in points if point['valid']]
+   if not valid_points: continue
+   item=dict(side=side,perspective_id=pid,label=p['label'],name=name,flow=flow,ssrc=ssrc,device=dev,observer=observer,output_device=output_device,input_device=input_device,lifecycle=lifecycle,kind=kind,points=valid_points,direction=direction,unit=unit)
 
    series.append(item)
 
-   peak=max(points,key=lambda x:x['value'])
+   peak=max(valid_points,key=lambda x:x['value'])
 
    if name != 'vd.silence_skipped':
 
-    findings.append(dict(side=side,name=name,peak=peak,threshold=rtt_threshold if name=='rtcp.rtt' else None,exceeded=name=='rtcp.rtt' and peak['value']>rtt_threshold,flow=flow,ssrc=ssrc,direction=direction,unit=unit))
+    findings.append(dict(side=side,name=name,peak=peak,threshold=rtt_threshold if name=='rtcp.rtt' else None,exceeded=name=='rtcp.rtt' and peak['value']>rtt_threshold,flow=flow,ssrc=ssrc,direction=direction,unit=unit,observer=observer,output_device=output_device,input_device=input_device,lifecycle=lifecycle))
 
-   if name=='vd.silence_skipped':
+   if name in ('vd.silence_skipped','vd.silence_played'):
 
     from .single_metrics import silence_delta
     deltas=silence_delta(points,MAX_GAP)
     resets=sum(current['value']<previous['value'] for previous,current in zip(points,points[1:]))
 
-    series.append(dict(item,name='derived.silence_delta',kind='interval',points=deltas))
+    derived='derived.silence_played_delta' if name=='vd.silence_played' else 'derived.silence_delta'
+    series.append(dict(item,name=derived,kind='interval',points=deltas))
 
-    if deltas: findings.append(dict(side=side,name='derived.silence_delta',peak=max(deltas,key=lambda x:x['value']),resets=resets,unit="ms",direction=direction))
+    if deltas: findings.append(dict(side=side,name=derived,peak=max(deltas,key=lambda x:x['value']),resets=resets,unit="ms",direction=direction,observer=observer,output_device=output_device,input_device=input_device,lifecycle=lifecycle))
 
   from .incidents import incidents
   audio=incidents(db,pid,device,offset,lower,upper)
@@ -149,7 +152,8 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
 
  for source,derived,title in [('vd.buffer','derived.buffer_sum','Audio nei buffer A+B'),('vd.dejitter_target','derived.dejitter_sum','Limiti dinamici A+B')]:
 
-  buffers=[next((s for s in series if s['side']==side and s['name']==source),None) for side in ('A','B')]
+  candidates=[[s for s in series if s['side']==side and s['name']==source] for side in ('A','B')]
+  buffers=[ss[0] if len(ss)==1 else None for ss in candidates]
 
   if all(buffers):
 

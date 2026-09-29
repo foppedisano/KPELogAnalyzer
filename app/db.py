@@ -64,7 +64,7 @@ def connect(db_path=None):
 def init(db):
     db.executescript(SCHEMA)
     version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-    if version not in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10'):
+    if version not in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'):
         raise RuntimeError('Unsupported database schema; back up the database before upgrading')
     if version == '1':
         filename = db.execute('PRAGMA database_list').fetchone()[2]
@@ -231,6 +231,24 @@ def init(db):
         from .analytics import SCHEMA as ANALYTICS_SCHEMA
         try:
             db.executescript("BEGIN IMMEDIATE;" + ANALYTICS_SCHEMA + "UPDATE meta SET value='10' WHERE key='schema_version'; COMMIT;")
+        except Exception:
+            db.rollback()
+            raise
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '10':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT COUNT(*) FROM imports').fetchone()[0]:
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v11.bak')
+            if backup.exists():
+                raise RuntimeError(f'Backup already exists: {backup}; preserve or rename before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        from .periodic import SCHEMA as PERIODIC_SCHEMA
+        try:
+            db.executescript("BEGIN IMMEDIATE;" + PERIODIC_SCHEMA + "UPDATE meta SET value='11' WHERE key='schema_version'; COMMIT;")
         except Exception:
             db.rollback()
             raise

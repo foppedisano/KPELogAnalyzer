@@ -40,7 +40,7 @@ def signal(event, selected_device, line_id):
         return None
     elapsed = re.search(r'Event (?:was|is currently)\s+'+NUM+r'\s*'+UNIT, text, re.I)
     return dict(kind='buffer_underrun',phase=phase,key=('buffer_underrun',selected_device,observer),
-                observer='Registrazione VD' if observer.startswith('VD ') else observer,
+                observer=observer,observer_key=observer,
                 device=selected_device,flow='',duration_ms=duration_ms(elapsed[1],elapsed[2].lower()) if elapsed else None,
                 t=epoch(event['ts']),evidence=proof)
 
@@ -64,7 +64,7 @@ def reconstruct(signals):
                     continue
                 episodes.append(current)
             inferred = s['phase']=='missing'
-            current=dict(kind=s['kind'],observer=s['observer'],device=s['device'],flow=s['flow'],
+            current=dict(kind=s['kind'],observer=s['observer'],observer_key=s.get('observer_key',s['observer']),device=s['device'],flow=s['flow'],
                          start=t-reported/1000 if inferred else t,end=None,last_observed=t,
                          duration_ms=reported if inferred else None, duration_basis='minimum' if inferred else 'unknown',
                          start_basis='threshold' if inferred else 'observed',status='open',evidence=[s['evidence']],
@@ -72,7 +72,7 @@ def reconstruct(signals):
             pending[key]=current
         elif s['phase']=='ongoing':
             if current is None:
-                current=dict(kind=s['kind'],observer=s['observer'],device=s['device'],flow=s['flow'],
+                current=dict(kind=s['kind'],observer=s['observer'],observer_key=s.get('observer_key',s['observer']),device=s['device'],flow=s['flow'],
                              start=t-reported/1000 if reported is not None else t,end=None,last_observed=t,
                              duration_ms=reported,duration_basis='minimum' if reported is not None else 'unknown',
                              start_basis='reported_elapsed',status='open',evidence=[],detected_at=t,stream=repr(key))
@@ -82,7 +82,7 @@ def reconstruct(signals):
             current['evidence'].append(s['evidence'])
         else:
             if current is None:
-                current=dict(kind=s['kind'],observer=s['observer'],device=s['device'],flow=s['flow'],
+                current=dict(kind=s['kind'],observer=s['observer'],observer_key=s.get('observer_key',s['observer']),device=s['device'],flow=s['flow'],
                              start=t-reported/1000 if reported is not None else t,end=None,last_observed=t,
                              duration_ms=None,duration_basis='unknown',start_basis='reported_duration' if reported is not None else 'unknown',
                              status='closed',evidence=[],detected_at=t,stream=repr(key))

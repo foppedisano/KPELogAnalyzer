@@ -126,3 +126,7 @@ evidenze restano nel DB; conserva anche lo ZIP se serve l'originale byte per byt
 Le analisi salvate conservano configurazioni e vengono ricalcolate: esporta JSON
 per congelare un risultato, CSV per i campioni, **Esporta database** per un backup
 consistente. Il DB e gli ZIP rimangono locali e non vanno pubblicati nel repository.
+
+## Media plane e terminologia
+
+La [guida al media plane VDK](media-plane.md) distingue VID/VOD, le specializzazioni audio e le connessioni molti-a-molti. Ogni VD opera nel proprio thread: separare scheduling locale, statistiche di ricezione RTP e conseguenze sul media. Il catalogo delle metriche e la guida in linea espongono lo stesso ambito semantico.

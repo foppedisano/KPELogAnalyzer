@@ -79,6 +79,8 @@ class ConversationTests(unittest.TestCase):
    self.db.execute("INSERT INTO observation_roles(perspective_id,session,participant,role) VALUES(1,'Case','A','app')")
    for t in ('source_profiles','call_correlations','leg_outcomes'):self.db.execute('DROP TABLE '+t)
    self.db.execute("DELETE FROM meta WHERE key LIKE 'conversation-discovery-%'")
+   from tests.fixtures import remove_periodic_schema
+   remove_periodic_schema(self.db)
    self.db.execute("UPDATE meta SET value='4' WHERE key='schema_version'")
   init(self.db)
   self.assertEqual(count,self.db.execute('SELECT count(*) FROM metrics').fetchone()[0])

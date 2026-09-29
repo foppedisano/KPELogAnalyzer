@@ -39,7 +39,7 @@ class AudioAnalyticsTests(unittest.TestCase):
         f=sample();f['VDlog.txt']=audio('03.400','end',600)+audio('03.600','end',400)+audio('03.400','end',600,observer='VD synthetic.wav')
         self.upload(f)
         rows=self.query("SELECT observer,SUM(underrun_ms),MAX(percent) FROM a_incident_windows GROUP BY observer ORDER BY observer")['rows']
-        self.assertEqual(rows,[['AWT - Default Audio Output',800,60],['Registrazione VD',600,40]])
+        self.assertEqual(rows,[['AWT - Default Audio Output',800,60],['VD synthetic.wav',600,40]])
         self.assertEqual(union_length([(0,600),(200,400),(500,1000)]),1000)
 
     def test_open_missing_duration_and_wrong_line(self):

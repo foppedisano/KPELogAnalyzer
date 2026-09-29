@@ -117,6 +117,8 @@ class SourceTests(unittest.TestCase):
         before=[tuple(r) for r in self.db.execute('SELECT * FROM events')]
         with self.db:
             self.db.execute('DELETE FROM import_producers')
+            from tests.fixtures import remove_periodic_schema
+            remove_periodic_schema(self.db)
             self.db.execute("UPDATE meta SET value='8' WHERE key='schema_version'")
         init(self.db)
         self.assertEqual([tuple(r) for r in self.db.execute('SELECT * FROM events')],before)

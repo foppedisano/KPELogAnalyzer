@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .db import connect, init, rows
 from .parser import MAX_ZIP, PARSER_VERSION, ingest, sip
 from .catalog import catalog, CATALOG
+from .media_semantics import MEDIA_PLANE
 from .metric_context import annotate as annotate_metrics, options as metric_options
 from .single_metrics import SINGLE_DERIVED, calculate
 from .diagnostics import diagnostics
@@ -130,6 +131,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(rows(db,"SELECT p.*,c.caller title FROM perspectives p JOIN calls c ON c.id=p.call_id WHERE c.call_key LIKE 'manual:%' ORDER BY p.start"))
                 if path == '/api/window-history':
                     return self.send(rows(db,'SELECT * FROM window_revisions WHERE perspective_id=? ORDER BY id DESC',(int(q('perspective')),)))
+                if path == '/api/media-semantics':
+                    return self.send(MEDIA_PLANE)
                 if path == '/api/catalog':
                     return self.send(catalog(db))
                 if path == '/api/diagnostics':

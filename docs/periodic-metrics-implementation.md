@@ -2,7 +2,7 @@
 
 ## Stato del lavoro
 
-Inventario completato, implementazione dei campi mancanti **ancora da iniziare**.
+Inventario completato; le sei fasi sono implementate nello schema 11 e nel parser 1.12.0.
 Questo documento permette di riprendere il lavoro in una nuova chat.
 La piattaforma ha già API analitiche, MCP stdio, episodi audio e occupazione
 temporale per finestre. Vedi [Analisi e MCP](analytics.md).
@@ -20,7 +20,7 @@ Contengono evidenze reali e devono rimanere esclusi da Git. L'inventario è stat
 limitato al tratto dell'ultimo import successivo al primo avvio con versioni
 verificate: anche uno ZIP recente può contenere record più vecchi.
 
-## Risultati e limiti
+## Risultati dell’inventario prima dell’implementazione
 
 - VD: 61 etichette distinte, di cui 52 con dati/stati e 9 intestazioni o
   segnaposto. Alcune righe contengono più valori: non sono 52 metriche scalari.
@@ -31,7 +31,7 @@ verificate: anche uno ZIP recente può contenere record più vecchi.
 - JSON KPE: otto famiglie osservate, incoming/outgoing e last/avg/min/max;
   tutti i percorsi numerici finiti osservati sono supportati. N/A non diventa zero.
 - Heartbeat VD e monitor NART/NAWT contengono byte, cicli, stati e timestamp
-  che oggi non vengono estratti come dati strutturati.
+  che allora non venivano estratti come dati strutturati.
 - Il parser numerico RTCP non riconosce alcuni valori in notazione scientifica:
   i valori finiti fuori range vanno conservati con valid=0, non scartati.
 
@@ -99,11 +99,11 @@ Eseguire unittest completo e controlli JavaScript; verificare UI se modificata.
 ## Punti di ingresso nel codice
 
 - app/enrichment.py: estrazione VD, scope device, deduplica, marker vd-1.
-- app/parser.py: statistiche JSON KPE e RTCP; parser corrente 1.11.0.
+- app/parser.py: statistiche JSON KPE e RTCP; parser corrente 1.12.0.
 - app/incidents.py: episodi per osservatore/input NART.
 - app/analytics_incidents.py: finestre e unione intervalli, metodo incident-occupancy-1.
 - app/analytics.py, app/analytics_mos.py, app/mcp_server.py: API analitiche e MCP.
-- app/db.py: schema corrente 10, migrazioni con backup.
+- app/db.py: schema corrente 11, migrazioni con backup.
 - app/source_dedup.py: identità della sorgente e import ripetuti.
 - tests/test_enrichment.py, tests/test_analytics_incidents.py, tests/test_parser.py.
 
@@ -120,3 +120,54 @@ il calcolo MOS né implementato i nuovi contatori.
 
 Non committare DB, ZIP, log, allegati con dati reali o configurazioni personali
 dei client. Per riprodurre l'inventario usare gli allegati locali in sola lettura.
+
+## Implementazione delle sei fasi
+
+1. Colonne `observer`, `output_device`, `input_device`, `lifecycle` sulle metriche;
+   contesto identico nei metadati. Creazioni osservate delimitano il ciclo; `unknown`
+   resta esplicito. Nessun SSRC inventato. Scope aggiornato a ogni Device name.
+2. `vd.silence_played`, `vd.underruns`, durata corrente e stati distinti;
+   `derived.silence_played_delta` nei grafici. Intervalli con reset/invalidità,
+   conflitti o distanza >30 s non producono delta. Confronto senza somma in
+   `a_counter_incident_matches`, con identità esatta dell’osservatore e input.
+3. RTCP accetta esponenti e conserva finiti invalidi (percentuali, negativi,
+   conteggi frazionari); NaN/N/A/infinito non producono zeri.
+4. Campioni saltati, limiti, errori/reset, pacchetti, byte e durate dichiarate;
+   µs normalizzati a ms con originali conservati; media senza unità resta raw.
+5. `periodic_metadata` conserva booleani, oggetti stato/codice/timestamp,
+   SN/ROC e clock RTCP. Cicli separati per fase, heartbeat distinto dai cumulativi.
+   API/MCP/catalogo espongono contesto, copertura e limiti; grafici e CSV mantengono
+   le dimensioni senza fondere osservatori o cicli.
+6. Backup consistente `.pre-v11.bak` prima della migrazione, ledger
+   `periodic_evidence` e marker per importazione `periodic-1:<id>`. Il recupero
+   adotta le metriche preesistenti conservando ID/valori e integra soltanto ciò
+   che manca. Il ledger rende idempotente anche la riesecuzione senza marker.
+   Il vecchio marker `vd-1` resta invariato. Tutto avviene dagli eventi, senza ZIP.
+
+### Backup e ritorno alla versione precedente
+
+Prima dell’avvio aggiornato esportare il database. La migrazione crea anche
+`/data/kpe.sqlite3.pre-v11.bak` per database con importazioni: un file omonimo
+esistente interrompe l’upgrade e non viene sovrascritto. Servono spazio per una
+copia completa e per gli indici/osservazioni aggiunti. Lo schema viene migrato
+in transazione; recupero e marker sono atomici. Se il recupero fallisce, l’avvio
+successivo riprende senza duplicazioni. Non avviare il vecchio codice sullo
+schema 11: per rollback arrestare il servizio e usare una copia del backup in
+un volume nuovo, conservando il database aggiornato. Annotazioni successive
+al backup non sono nel backup.
+
+Le ricette analytics-1 restano leggibili; il risultato espone analytics-2 e
+la selezione viene rivalutata sui dati correnti. Riconnettere il client MCP
+per rileggere istruzioni e catalogo dopo l’aggiornamento.
+
+Le somme diagnostiche A+B vengono omesse se uno dei lati ha più osservatori/cicli candidati: nessuna scelta implicita di una serie.
+
+### Validazione eseguita
+
+Test sintetici includono tutte le etichette numeriche VD censite, famiglie di
+stati, heartbeat/monitor, cinque nuovi contatori RTCP, esponenti/non finiti,
+più osservatori/input, rotazioni, righe ripetute, cicli, reset/conflitti/gap,
+finestre manuali, confronto episodi e protezioni SQL/MCP. Upgrade provato su
+una copia SQLite coerente del database locale, confrontando ID, valori originali
+e annotazioni; il secondo avvio non aggiunge osservazioni. Gli allegati del
+collaudo completo sono locali in `data/analysis/`, esclusi da Git.

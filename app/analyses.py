@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from .diagnostics import NAMES
 
-METRICS=(*NAMES,'derived.silence_delta','derived.buffer_sum','derived.dejitter_sum')
+METRICS=(*NAMES,'derived.silence_delta','derived.silence_played_delta','derived.buffer_sum','derived.dejitter_sum')
 
 
 def validate(db, raw):
@@ -35,7 +35,7 @@ def validate(db, raw):
  styles=c.get('styles',{})
  if not isinstance(styles,dict) or len(styles)>200: raise ValueError('Troppe serie')
  for key,style in styles.items():
-  if len(key)>400 or not isinstance(style,dict) or not re.fullmatch(r'#[0-9a-fA-F]{6}',str(style.get('color',''))): raise ValueError('Colore non valido')
+  if len(key)>2048 or not isinstance(style,dict) or not re.fullmatch(r'#[0-9a-fA-F]{6}',str(style.get('color',''))): raise ValueError('Colore non valido')
   if not isinstance(style.get('visible',True),bool): raise ValueError('Visibilità non valida')
   if style.get('symbol','circle') not in ('circle','square','triangle','diamond'): raise ValueError('Simbolo non valido')
  return c

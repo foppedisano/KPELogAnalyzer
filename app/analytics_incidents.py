@@ -7,7 +7,7 @@ from .incidents import incidents, epoch
 METHOD='incident-occupancy-1'
 TABLES={
  'a_incidents': ('Audio lifecycle episodes, separately by observer (AWT/VD/RTP) and input device. Request datasets=["incidents"]. start/end are log coordinates; placed_start/end use the selected placement convention, not sample-accurate truth.',
-   'id INTEGER,series_key TEXT,call_id INTEGER,perspective_id INTEGER,import_id INTEGER,kind TEXT,observer TEXT,device TEXT,flow TEXT,start TEXT,end TEXT,last_observed TEXT,detected_at TEXT,duration_ms REAL,wall_span_ms REAL,duration_basis TEXT,start_basis TEXT,status TEXT,placed_start TEXT,placed_end TEXT,placement_basis TEXT,method TEXT'),
+   'id INTEGER,series_key TEXT,call_id INTEGER,perspective_id INTEGER,import_id INTEGER,kind TEXT,observer TEXT,device TEXT,flow TEXT,start TEXT,end TEXT,last_observed TEXT,detected_at TEXT,duration_ms REAL,wall_span_ms REAL,duration_basis TEXT,start_basis TEXT,status TEXT,placed_start TEXT,placed_end TEXT,placement_basis TEXT,method TEXT,observer_key TEXT'),
  'a_incident_evidence': ('Original events for each episode; incident_id joins a_incidents.id. All references retained independently of period clipping.',
    'incident_id INTEGER,event_id INTEGER,filename TEXT,line_no INTEGER'),
  'a_incident_windows': ('Fixed bins anchored at perspective connection (else first evidence). Union of closed underrun intervals per series, never sum overlapping durations. percent is NULL for unresolved episodes; known_percent is only documented closed occupancy. Zero means no reconstructed closed underrun, not proven healthy audio. Last/clipped bin uses its actual duration.',
@@ -62,11 +62,11 @@ def populate(db,config):
             if counter>100000:raise ValueError('Troppi episodi: restringere le chiamate')
             key=hashlib.sha256(str((p['id'],e['stream'])).encode()).hexdigest()[:24]
             a,b,basis=placement(e,policy)
-            db.execute('INSERT INTO a_incidents VALUES('+','.join('?' for _ in range(22))+')',
+            db.execute('INSERT INTO a_incidents VALUES('+','.join('?' for _ in range(23))+')',
                 (counter,key,p['call_id'],p['id'],p['import_id'],e['kind'],e['observer'],e['device'],e['flow'],
                  stamp(us(e['start'])),stamp(us(e['end'])) if e['end'] is not None else None,
                  stamp(us(e['last_observed'])),stamp(us(e['detected_at'])),e['duration_ms'],e.get('wall_span_ms'),
-                 e['duration_basis'],e['start_basis'],e['status'],stamp(a),stamp(b),basis,METHOD))
+                 e['duration_basis'],e['start_basis'],e['status'],stamp(a),stamp(b),basis,METHOD,e.get('observer_key',e['observer'])))
             db.executemany('INSERT INTO a_incident_evidence VALUES(?,?,?,?)',
                 ((counter,r['event_id'],r['filename'],r['line']) for r in e['evidence']))
             if e['kind']=='buffer_underrun':groups[(p['id'],key)].append((counter,e,a,b))

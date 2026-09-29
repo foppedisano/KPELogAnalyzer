@@ -120,10 +120,12 @@ class AnalyticsTests(unittest.TestCase):
         filename=db.execute('PRAGMA database_list').fetchone()[2]
         with db:
             db.execute('DROP TABLE analysis_recipe_revisions');db.execute('DROP TABLE analysis_recipes')
+            from tests.fixtures import remove_periodic_schema
+            remove_periodic_schema(db)
             db.execute("UPDATE meta SET value='9' WHERE key='schema_version'")
         init(db);init(db)
         self.assertEqual(db.execute('SELECT COUNT(*) FROM calls').fetchone()[0],1)
-        self.assertEqual(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'10')
+        self.assertEqual(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'11')
         backup=sqlite3.connect(filename+'.pre-v10.bak')
         self.assertEqual(backup.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'9')
         backup.close();db.close()

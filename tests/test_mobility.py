@@ -92,6 +92,8 @@ class MobilityTests(unittest.TestCase):
             db.execute("INSERT INTO conversations(title,note) VALUES('test','keep')")
             for t in ('movement_samples','movement_sequences','network_observations'):db.execute('DROP TABLE '+t)
             db.execute("DELETE FROM meta WHERE key LIKE 'mobility-%'")
+            from tests.fixtures import remove_periodic_schema
+            remove_periodic_schema(db)
             db.execute("UPDATE meta SET value='6' WHERE key='schema_version'")
         init(db);init(db)
         self.assertEqual(db.execute('SELECT note FROM conversations').fetchone()[0],'keep')

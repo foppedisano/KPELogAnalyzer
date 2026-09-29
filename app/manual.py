@@ -41,6 +41,7 @@ def manual_window(db,obj, edit=False):
    pid,cid=old['id'],old['call_id']
    db.execute('INSERT INTO window_revisions(perspective_id,snapshot) VALUES(?,?)',(pid,json.dumps(dict(old))))
    db.execute('UPDATE metrics SET call_id=NULL,perspective_id=NULL WHERE perspective_id=?',(pid,))
+   db.execute('UPDATE periodic_metadata SET call_id=NULL,perspective_id=NULL WHERE perspective_id=?',(pid,))
    db.execute('UPDATE events SET call_id=NULL,perspective_id=NULL WHERE perspective_id=?',(pid,))
    db.execute('UPDATE perspectives SET line_id=?,start=?,end=? WHERE id=?',(line,start,end,pid))
    db.execute('UPDATE calls SET caller=?,start=?,end=? WHERE id=?',(str(obj.get('title',old['title']))[:200],start,end,cid))
@@ -50,12 +51,14 @@ def manual_window(db,obj, edit=False):
    cid=db.execute('INSERT INTO calls(call_key,caller,start,end) VALUES(?,?,?,?)',(key,str(obj.get('title','Finestra manuale'))[:200],start,end)).lastrowid
    pid=db.execute("INSERT INTO perspectives(call_id,import_id,line_id,start,end,status,evidence) VALUES(?,?,?,?,?,'manual / partial','Analyst-defined time window; no SIP identity')",(cid,iid,line,start,end)).lastrowid
   # A VD event may contain several devices. Assign metrics individually, not the entire block.
-  candidates=list(db.execute('''SELECT m.id,e.line_id,m.device FROM metrics m JOIN events e ON e.id=m.event_id
+  candidates=list(db.execute('''SELECT m.id,e.line_id,m.device,m.output_device FROM metrics m JOIN events e ON e.id=m.event_id
    WHERE e.import_id=? AND m.call_id IS NULL AND m.ts>=? AND m.ts<=?''',(iid,start,end)))
   import re
   for m in candidates:
    device=re.search(r'of Line (\d+)',m['device'] or '')
+   if not device and m['device']=='Default Audio Input': device=re.search(r'of Line (\d+)',m['output_device'] or '')
    metric_line=int(device[1]) if device else m['line_id']
    if metric_line==line: db.execute('UPDATE metrics SET call_id=?,perspective_id=? WHERE id=?',(cid,pid,m['id']))
   db.execute('UPDATE events SET call_id=?,perspective_id=? WHERE import_id=? AND call_id IS NULL AND line_id=? AND ts>=? AND ts<=?',(cid,pid,iid,line,start,end))
+  db.execute('UPDATE periodic_metadata SET call_id=?,perspective_id=? WHERE import_id=? AND call_id IS NULL AND line_id=? AND ts>=? AND ts<=?',(cid,pid,iid,line,start,end))
  return dict(call_id=cid,perspective_id=pid)

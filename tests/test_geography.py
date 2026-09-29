@@ -95,10 +95,12 @@ class GeographyTests(unittest.TestCase):
         with db:
             for table in ('geo_mos_evidence','geo_mos','geo_positions'):db.execute('DROP TABLE '+table)
             db.execute("DELETE FROM meta WHERE key LIKE 'geo-mos-%'")
+            from tests.fixtures import remove_periodic_schema
+            remove_periodic_schema(db)
             db.execute("UPDATE meta SET value='5' WHERE key='schema_version'")
         init(db)
         self.assertEqual(db.execute('SELECT id FROM calls').fetchall(),ids)
-        self.assertEqual(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'10')
+        self.assertEqual(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'11')
         with sqlite3.connect(str(Path(self.temp.name)/'kpe.sqlite3')+'.pre-v6.bak') as old:
             self.assertEqual(old.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'5')
         old.close()

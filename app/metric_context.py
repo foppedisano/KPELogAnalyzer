@@ -12,9 +12,11 @@ GROUPS={
 
 
 def context(name,direction,role='app'):
+    if name.startswith('vd.') and direction not in ('incoming',''):
+        return dict(category='unknown',label='Elaborazione locale in uscita' if direction=='outgoing' else 'Device locale · direzione non attribuita')
     if name in ('rtcp.rtt','network.ping','kpe.common.rtt') or name in ('derived.buffer_sum','derived.dejitter_sum'):
         return dict(category='bidirectional',label='Andata e ritorno' if 'rtt' in name or name=='network.ping' else 'Indicatore combinato A+B')
-    local=(name.startswith('vd.') or name.startswith('incident.') or name=='derived.silence_delta'
+    local=(name.startswith('vd.') or name.startswith('incident.') or name in ('derived.silence_delta','derived.silence_played_delta')
            or name=='rtcp.packets_received' or (name in ('rtcp.jitter','rtcp.loss','derived.mos_reference','telemetry.network_loss') and direction=='incoming'))
     peer=name in ('rtcp.jitter','rtcp.loss','derived.mos_reference','telemetry.network_loss') and direction=='outgoing'
     if role=='gw' and (local or peer):
@@ -40,6 +42,9 @@ def options(db,ids,catalog):
     marks=','.join('?' for _ in ids)
     ps=rows(db,f'SELECT p.id,r.role FROM perspectives p LEFT JOIN observation_roles r ON r.perspective_id=p.id WHERE p.call_id IN ({marks})',ids)
     role='app' if all((p['role'] or 'app')=='app' for p in ps) else 'unknown'
+    vd_directions={}
+    for row in rows(db,f"SELECT DISTINCT name,direction FROM metrics WHERE call_id IN ({marks}) AND name LIKE 'vd.%'",ids):
+        vd_directions.setdefault(row['name'],set()).add(row['direction'])
     output=[]
     for metric in catalog:
         name=metric['name']
@@ -47,6 +52,10 @@ def options(db,ids,catalog):
         directions=['incoming','outgoing'] if name in ('rtcp.jitter','rtcp.loss','derived.mos_reference','telemetry.network_loss') else ['']
         for direction in directions:
             c=context(name,direction,role)
+            if name.startswith('vd.'):
+                observed=vd_directions.get(name,set())
+                if observed and observed!={'incoming'}:
+                    c=context(name,next(iter(observed)) if len(observed)==1 else 'unknown',role)
             output.append(dict(name=name,direction=direction,category=c['category'],group=GROUPS[c['category']],
                 title=metric['title']+' · '+c['label'],value=name+('|' +direction if direction else '')))
     return output

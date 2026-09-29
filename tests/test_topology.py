@@ -65,6 +65,8 @@ class TopologyTests(unittest.TestCase):
         self.load()
         before=self.db.execute('SELECT COUNT(*) FROM events').fetchone()[0]
         with self.db:
+            from tests.fixtures import remove_periodic_schema
+            remove_periodic_schema(self.db)
             for table in ['source_profiles','call_correlations','leg_outcomes']:
                 self.db.execute('DROP TABLE '+table)
             self.db.execute("DELETE FROM meta WHERE key LIKE 'conversation-discovery-%'")
@@ -77,7 +79,7 @@ class TopologyTests(unittest.TestCase):
         backup.close()
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM events').fetchone()[0],before)
         self.assertEqual(self.db.execute('SELECT name FROM source_identities').fetchone()[0],'Preserved')
-        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'10')
+        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'11')
         init(self.db)
 
 

@@ -202,3 +202,7 @@ il risultato dichiara la versione corrente. Riconnettere il client MCP.
 Gli ambiti distinguono scheduling, trasporto RTP, buffer/media, elaborazione/I/O, sonde di rete e modelli di qualità; `unspecified` segnala semantica non confermata. Non sono classificazioni della causa di un guasto né tipi del device. Leggere anche `meaning`, `source`, `kind`, `unit`, `limits` e il contesto della singola osservazione. [Gerarchia completa](media-plane.md). Gli episodi conservano il nome osservato del VD: non viene più sostituito con «Registrazione VD», che deduceva una destinazione non garantita. Non cambiano dati archiviati o ID.
 
 Esempio di richiesta MCP: «Distingui per questa chiamata scheduling dei thread, ricezione RTP e conseguenze sul media; separa VID/VOD e osservatori, indicando copertura ed evidenze, senza attribuire automaticamente gli underrun alla rete». Riconnettere il client per rileggere le istruzioni e il catalogo.
+
+## Profili temporali delle zone
+
+Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.

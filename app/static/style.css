@@ -903,3 +903,15 @@ fieldset { border:1px solid var(--line);border-radius:8px;margin:16px 0;padding:
 .analytics-panel .actions .analytics-check { display: flex; align-items: center; gap: 8px; flex: 2 1 240px; align-self: center; }
 .analytics-panel .analytics-check input { width: auto; margin: 0; }
 .analytics-panel textarea { width: 100%; box-sizing: border-box; }
+
+/* Exact-cell temporal exploration, shared with the API and MCP. */
+.geo-temporal{width:min(1200px,95vw);max-width:95vw;max-height:92vh;overflow:auto;border:1px solid #cad8df;border-radius:16px;padding:24px;color:#173440;background:#fff}
+.geo-temporal::backdrop{background:rgba(14,34,45,.55)}
+.geo-temporal header{display:flex;justify-content:space-between;align-items:start;gap:16px}
+.geo-temporal h3{margin-top:28px}.geo-temporal details{margin:16px 0}.geo-temporal summary{cursor:pointer;font-weight:650}
+.geo-temporal select{max-width:100%}.geo-temporal #gt-series{width:100%}
+.gt-scroll{max-height:340px;overflow:auto}.gt-scroll table{width:100%;font-size:12px}.gt-scroll th{position:sticky;top:0;background:#eef4f6}.gt-scroll td,.gt-scroll th{padding:8px;text-align:left}
+.gt-heat-scroll{overflow-x:auto}.gt-heat{display:grid;grid-template-columns:42px repeat(24,minmax(36px,1fr));gap:3px;min-width:980px;align-items:center;font-size:10px;text-align:center}
+.gt-heat-cell{padding:10px 2px;border:1px solid transparent;color:#102d3c;border-radius:3px}.gt-heat-cell.limited{border:1px dashed #7895a6}
+.gt-trend{display:block;width:100%;height:auto;max-height:230px;font-size:12px}.geo-temporal .geo-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:700px){.geo-temporal{padding:14px}.geo-temporal .geo-stats{grid-template-columns:1fr}.geo-temporal .geo-date-controls{flex-wrap:wrap}}

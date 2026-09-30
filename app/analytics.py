@@ -11,6 +11,7 @@ from datetime import datetime
 from .db import rows
 from .mos import MODEL
 from .media_semantics import MEDIA_PLANE
+from .geo_temporal import contract as geo_temporal_contract
 
 VERSION = 'analytics-2'
 MAX_ROWS = 1000
@@ -350,9 +351,9 @@ def catalog(db):
             tables[name]=dict(description=meaning,dataset='incidents' if name in INCIDENT_TABLES or name=='a_counter_incident_matches' else 'mos' if name in DERIVED else 'base',
                              columns=[dict(name=r[1],type=r[2]) for r in db.execute('PRAGMA table_info('+name+')')])
         from .catalog import CATALOG, PERIODIC_METADATA
-        return dict(version=VERSION,media_plane=MEDIA_PLANE,tables=tables,rules=RULES+MEDIA_PLANE['rules'],metrics=CATALOG,periodic_metadata=PERIODIC_METADATA,model=MODEL,examples=EXAMPLES,
+        return dict(version=VERSION,media_plane=MEDIA_PLANE,geo_temporal=geo_temporal_contract(),tables=tables,rules=RULES+MEDIA_PLANE['rules'],metrics=CATALOG,periodic_metadata=PERIODIC_METADATA,model=MODEL,examples=EXAMPLES,
                     limits=dict(rows=MAX_ROWS,query_seconds=3,prepare_seconds=30,mos_intervals=MAX_INTERVALS),
-                    endpoints=['catalog','coverage','query','evidence','recipes','run-recipe'])
+                    endpoints=['catalog','coverage','query','evidence','recipes','run-recipe','geo-temporal','geo-cells'])
     finally: db.rollback()
 
 

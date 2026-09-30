@@ -153,3 +153,7 @@ le evidenze in tabelle separate. È una vista senza identità, non una garanzia
 matematica di anonimato delle coordinate precise. Non esportare il DB come se
 contenesse soltanto celle anonime. Le coppie posizione–MOS e gli input sono
 conservati senza retention automatica, per poter cambiare aggregazioni in futuro.
+
+## Profili temporali delle zone
+
+Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.

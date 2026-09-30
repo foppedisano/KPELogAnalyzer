@@ -1,4 +1,5 @@
 """Dependency-free MCP stdio adapter to the local analytical HTTP API."""
+from .geo_temporal import SCHEMA as GEO_TEMPORAL_SCHEMA, CELL_SCHEMA
 import argparse
 import json
 import sys
@@ -8,7 +9,7 @@ from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHand
 
 PROTOCOL = '2025-11-25'
 INSTRUCTIONS = ('Start with analytics_catalog and analytics_coverage. Read media_plane and each metric semantics before interpreting observations. VD is the general class, not file recording. Each VD runs in its own thread; distinguish local scheduling, RTP reception and media consequences. VID distributes to connected VODs; VOD mixes connected VIDs. NART/ART/FileReaderThread are VAID; NAWT/AWT/FileWriterThread are VAOD. Never infer network causality from underrun alone. Interpret only available evidence. '
-                'Keep observers, streams, clock domains and unknown identities distinct. '
+                'Keep observers, streams, clock domains and unknown identities distinct. Use analytics_geo_temporal for cell profiles; select legacy_observed or UTC explicitly, never interpret UTC as local hour. Coverage flags are not predictive confidence. '
                 'Discover a_periodic_metadata and a_counter_intervals for recent textual observations. '
                 'Never sum cumulative samples or add counter deltas to episode durations. '
                 'Counter intervals have no sub-interval localization; inspect reset, gap and conflict status. '
@@ -34,6 +35,8 @@ def schema(properties=None, required=None):
 
 
 TOOLS = [
+    ('analytics_geo_cells','Discover geographic grid cell IDs and exact bounds with the same filters as the map. This overview may contain both clock bases; use analytics_geo_temporal with an explicit clock basis for temporal comparisons.','POST','geo-cells',CELL_SCHEMA),
+    ('analytics_geo_temporal','Describe an exact map cell over time: historical day/week/month/year bins, recurring hour/weekday/month profiles, coverage, separate clock bases and paginated evidence. Discover metrics and schema in analytics_catalog.geo_temporal. Descriptive only, no forecasts.','POST','geo-temporal',GEO_TEMPORAL_SCHEMA),
     ('analytics_catalog','Discover tables, columns, metric semantics, join keys, rules and examples.','GET','catalog',schema()),
     ('analytics_coverage','Check identities, networks, positions, telemetry and periodic metrics/states including invalid and unassigned observations. Counts are raw availability.','GET','coverage',schema()),
     ('analytics_query','Execute a bounded read-only analytical query. Request datasets=["mos"] for MOS; datasets=["incidents"] for AWT/VD audio episodes and per-window occupancy.','POST','query',DEFINITION),
@@ -96,7 +99,7 @@ class Server:
                 return self.error(ident,-32602,'protocolVersion, clientInfo and capabilities required')
             self.initialized=True
             result=dict(protocolVersion=PROTOCOL,capabilities={'tools':{'listChanged':False}},
-                        serverInfo={'name':'kpe-log-analytics','version':'1.1.0'},instructions=INSTRUCTIONS)
+                        serverInfo={'name':'kpe-log-analytics','version':'1.2.0'},instructions=INSTRUCTIONS)
         elif not self.ready:return self.error(ident,-32000,'Initialize first')
         elif method=='tools/list':
             result={'tools':[dict(name=n,description=d,inputSchema=s,

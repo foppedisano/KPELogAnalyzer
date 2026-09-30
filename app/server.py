@@ -293,6 +293,12 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/api/analytics/'):
                 from . import analytics
                 name=path.removeprefix('/api/analytics/')
+                if method=='POST' and name=='geo-cells':
+                    from .geo_temporal import cells
+                    return self.send(cells(db,obj))
+                if method=='POST' and name=='geo-temporal':
+                    from .geo_temporal import profile
+                    return self.send(profile(db,obj))
                 if method=='POST' and name in ('query','evidence','run-recipe'):
                     handler={'query':analytics.query,'evidence':analytics.evidence,'run-recipe':analytics.run_recipe}[name]
                     return self.send(handler(db,obj))

@@ -70,7 +70,7 @@ function updateSelection() {
 }
 async function refresh() {
   const [calls, perspectives, metrics, overview] = await Promise.all([
-    api("calls"),
+    api("calls?attempts=1"),
     api("perspectives"),
     api("metric-names"),
     api("overview"),
@@ -99,6 +99,7 @@ async function render() {
   const page = $("#page");
   const views = {
     calls: renderCalls,
+    network: renderNetwork,
     mos: renderMos,
     geography: renderGeography,
     compare: renderCompare,
@@ -117,7 +118,9 @@ async function render() {
 }
 function stats() {
   const o = state.overview;
-  return `<div class="stats"><div class="stat"><span>Chiamate ricostruite</span><strong>${number(o.calls)}</strong><small>Identità SIP e sessioni locali</small></div><div class="stat"><span>Archivi importati</span><strong>${number(o.imports)}</strong><small>Export conservati</small></div><div class="stat"><span>Campioni metrici</span><strong>${number(o.metrics)}</strong><small>${number(o.unassigned_metrics)} non attribuiti</small></div><div class="stat"><span>Eventi indicizzati</span><strong>${number(o.events)}</strong><small>Con file e riga di origine</small></div></div>`;
+  const attempts = state.calls.filter(c => c.id < 0).length;
+  const listedCalls = state.calls.length - attempts;
+  return `<div class="stats"><div class="stat"><span>Chiamate ricostruite</span><strong>${number(o.calls)}</strong><small>Identità SIP e sessioni locali</small></div><div class="stat"><span>Tentativi utente nel registro</span><strong>${number(attempts)}</strong><small>Richieste esplicite, incluse quelle bloccate</small></div><div class="stat"><span>Totale voci del registro</span><strong>${number(state.calls.length)}</strong><small>${number(listedCalls)} chiamate + ${number(attempts)} tentativi · come nella barra laterale</small></div><div class="stat"><span>Archivi importati</span><strong>${number(o.imports)}</strong><small>Export conservati</small></div><div class="stat"><span>Campioni metrici</span><strong>${number(o.metrics)}</strong><small>${number(o.unassigned_metrics)} non attribuiti</small></div><div class="stat"><span>Eventi indicizzati</span><strong>${number(o.events)}</strong><small>Con file e riga di origine</small></div></div>`;
 }
 function mosCell(c, direction) {
   const summary = c.mos || {}, m = summary[direction];
@@ -134,7 +137,7 @@ function callSortValue(c, key) {
   return c[key] ?? null;
 }
 function callTable(calls) {
-  return `<div class="table-wrap"><table><thead><tr><th aria-label="Seleziona"></th><th>Chiamata / interlocutori</th><th>MOS ↓ downstream</th><th>MOS ↑ upstream</th><th>Stato osservato</th><th>Durata connessa</th><th>Prospettive</th><th>Metriche</th></tr></thead><tbody>${calls.map((c) => `<tr class="call-row" data-id="${c.id}" tabindex="0"><td><input type="checkbox" class="call-check" aria-label="Seleziona chiamata ${c.id}" value="${c.id}" ${state.selected.has(c.id) ? "checked" : ""}></td><td><div class="identity" title="${esc(c.caller + " → " + c.callee)}">${esc(shortIdentity(c.caller))} <span class="muted">→</span> ${esc(shortIdentity(c.callee))}</div><div class="call-date">${stamp(c.start)} <span class="muted">· #${c.id}</span></div></td>${mosCell(c,"downstream")}${mosCell(c,"upstream")}<td><span class="tag ${c.status.includes("failed") ? "warn" : c.status.includes("partial") ? "neutral" : ""}">${esc(c.status)}</span></td><td class="mono nowrap">${duration(c)}</td><td>${c.perspectives} <span class="muted">sorgenti</span></td><td class="mono">${number(c.metrics)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th aria-label="Seleziona"></th><th>Chiamata / interlocutori</th><th>MOS ↓ downstream</th><th>MOS ↑ upstream</th><th>Stato osservato</th><th>Durata connessa</th><th>Prospettive</th><th>Metriche</th></tr></thead><tbody>${calls.map((c) => `<tr class="call-row" data-id="${c.id}" tabindex="0"><td><input ${c.id<0?'disabled':''} type="checkbox" class="call-check" aria-label="Seleziona chiamata ${c.id}" value="${c.id}" ${state.selected.has(c.id) ? "checked" : ""}></td><td><div class="identity" title="${esc(c.caller + " → " + c.callee)}">${c.id<0?'Tentativo utente':esc(shortIdentity(c.caller))} <span class="muted">→</span> ${esc(shortIdentity(c.callee))}</div><div class="call-date">${stamp(c.start)} <span class="muted">· #${c.id}</span></div></td>${mosCell(c,"downstream")}${mosCell(c,"upstream")}<td><span class="tag ${/failed|blocked/.test(c.status) ? "warn" : c.status.includes("partial") ? "neutral" : ""}">${esc(c.status==='blocked'?'Bloccato prima del SIP':c.status==='requested'?'Richiesta utente':c.status)}</span><small class="call-reason">${esc(c.reason||'')}${c.copies>1?' · '+c.copies+' copie dello stesso messaggio':''}</small></td><td class="mono nowrap">${duration(c)}</td><td>${c.perspectives} <span class="muted">sorgenti</span></td><td class="mono">${number(c.metrics)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function bindCalls() {
   $$(".call-row").forEach((row) => {
@@ -166,11 +169,11 @@ function renderCalls(page) {
       `<span class="tag">● Workspace privato</span>`,
     ) +
     stats() +
-    `<div class="panel"><div class="panel-head"><h2>Registro chiamate</h2><div class="toolbar"><input id="call-search" aria-label="Cerca chiamate" placeholder="Cerca interlocutore o Call-ID…"><button id="compare-selected">Confronta selezionate →</button></div></div><div class="call-sort toolbar"><label>Ordina per <select id="call-sort"><option value="start">Data</option><option value="duration">Durata connessa</option><option value="status">Stato osservato</option><option value="metrics">Numero metriche</option>${['downstream','upstream'].map(d=>['minimum','mean','maximum'].map((v,i)=>`<option value="mos.${d}.${v}">MOS ${d} · ${['minimo','medio','massimo'][i]}</option>`).join('')).join('')}</select></label><label>Ordine <select id="call-order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label><span class="muted">MOS: media pesata in evidenza · minimo e massimo · copertura temporale</span></div><div id="call-list"></div><div class="table-note">Orari originali dei log, senza fuso dichiarato. Seleziona più righe per confrontare chiamate o partecipanti. Massimo 2.000 chiamate elencate; ordinamento su queste righe. MOS a profilo fisso, sola perdita RTCP: rosso &lt;3, arancio 3–4, verde ≥4 (soglie indicative). Prospettiva dell’ultimo import non duplicato, senza unire flussi; sorgente nel tooltip. Dati mancanti in fondo.</div></div>`;
+    `<div class="panel"><div class="panel-head"><h2>Registro chiamate</h2><div class="toolbar"><select id="call-type" aria-label="Tipo di voce"><option value="all">Tutte le voci</option><option value="blocked">Tentativi bloccati</option><option value="attempt">Richieste utente</option><option value="sip">Sessioni SIP</option></select><input id="call-search" aria-label="Cerca chiamate" placeholder="Cerca interlocutore o Call-ID…"><button id="compare-selected">Confronta selezionate →</button></div></div><div class="call-sort toolbar"><label>Ordina per <select id="call-sort"><option value="start">Data</option><option value="duration">Durata connessa</option><option value="status">Stato osservato</option><option value="metrics">Numero metriche</option>${['downstream','upstream'].map(d=>['minimum','mean','maximum'].map((v,i)=>`<option value="mos.${d}.${v}">MOS ${d} · ${['minimo','medio','massimo'][i]}</option>`).join('')).join('')}</select></label><label>Ordine <select id="call-order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label><span class="muted">MOS: media pesata in evidenza · minimo e massimo · copertura temporale</span></div><div id="call-list"></div><div class="table-note">Orari originali dei log, senza fuso dichiarato. Seleziona più righe per confrontare chiamate o partecipanti. Richieste utente e sessioni SIP sono voci distinte: un tentativo accettato può avere entrambe. Non sono un conteggio di chiamate uniche. Richieste riconosciute dai messaggi espliciti App.log; azioni non registrate non sono ricostruibili. Massimo 2.000 sessioni e 2.000 richieste elencate; ordinamento su queste righe. MOS a profilo fisso, sola perdita RTCP: rosso &lt;3, arancio 3–4, verde ≥4 (soglie indicative). Prospettiva dell’ultimo import non duplicato, senza unire flussi; sorgente nel tooltip. Dati mancanti in fondo.</div></div>`;
   function list() {
     const text = $("#call-search").value.toLowerCase();
     const calls = state.calls.filter((c) =>
-      (c.caller + c.callee + c.sip_call_id).toLowerCase().includes(text),
+      (c.caller + c.callee + c.sip_call_id + (c.reason||'')).toLowerCase().includes(text) && ({all:true,blocked:c.status==='blocked',attempt:c.id<0,sip:c.id>0}[$('#call-type').value]),
     );
     const key = $("#call-sort").value, sign = $("#call-order").value === 'asc' ? 1 : -1;
     calls.sort((a,b) => {
@@ -194,10 +197,12 @@ function renderCalls(page) {
   $("#call-sort").onchange = () => { $("#call-order").value = $("#call-sort").value.startsWith('mos.') ? 'asc' : 'desc'; list(); };
   $("#call-order").onchange = list;
   list();
+  $("#call-type").onchange = list;
   $("#call-search").oninput = list;
   $("#compare-selected").onclick = safe(() => setView("compare"));
 }
 async function detail(id) {
+  if(id<0)return attemptDetail(state.calls.find(c=>c.id===id));
   window.scrollTo(0, 0);
   state.current = id;
   if (chartCleanup) {
@@ -226,6 +231,7 @@ async function detail(id) {
       : "Aggiungi al confronto";
   };
   $("#open-mos").onclick = safe(() => { window.mosLocal = ps[0]?.id; return setView("mos"); });
+  const reasonPanel=document.createElement('div');reasonPanel.className='panel';reasonPanel.innerHTML=`<p><strong>Esito osservato:</strong> ${esc(c.reason||c.status)}${c.reason_evidence?'<br>'+esc(c.reason_evidence.filename)+':'+c.reason_evidence.line_no+' · evento #'+c.reason_evidence.event_id:''}</p>`;$('#analysis-panel').before(reasonPanel);
   const detailToken=renderToken;
   await mountChart($("#chart-panel"), [id], "derived.mos_reference|incoming");
   if(detailToken!==renderToken || !$("#detail-events"))return;

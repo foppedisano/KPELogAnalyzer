@@ -66,7 +66,7 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
 
  if lower is not None and upper is not None and lower >= upper: raise ValueError('Inizio analisi deve precedere la fine')
 
- series=[]; coverage=[]; findings=[]; audio_episodes=[]; incident_warnings=[]
+ series=[]; coverage=[]; findings=[]; audio_episodes=[]; incident_warnings=[]; network=[]
 
  for side,pid,device in [('A',a,device_a),('B',b,device_b)]:
 
@@ -86,6 +86,14 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
   import math
 
   if not math.isfinite(offset) or abs(offset)>86400: raise ValueError('Offset massimo ±86400 secondi')
+  from .connectivity import timeline
+  network_end = p['end'] or db.execute('SELECT MAX(ts) FROM events WHERE import_id=? AND call_id=?',(p['import_id'],p['call_id'])).fetchone()[0]
+  if p['start'] and network_end and network_end > p['start']:
+   ns=max(seconds(p['start']), lower-offset if lower is not None else seconds(p['start']))
+   ne=min(seconds(network_end), upper-offset if upper is not None else seconds(network_end))
+   if 0 < ne-ns <= 86400:
+    network.append(dict(timeline(db,p['import_id'],(datetime(1970,1,1)+timedelta(seconds=ns)).isoformat(' '),(datetime(1970,1,1)+timedelta(seconds=ne)).isoformat(' ')),side=side,perspective_id=pid,clock_offset=offset))
+
 
   conditions=[]; args=[pid,*NAMES]
   for bound,operator in ((lower,'>='),(upper,'<=')):
@@ -177,5 +185,5 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
  annotate(db,series)
  for f in findings: f['perspective_id']=next((c['perspective_id'] for c in coverage if c['side']==f['side']),None)
  annotate(db,findings)
- return dict(incidents=audio_episodes,incident_warnings=incident_warnings,window=dict(start=lower,end=upper),series=series,coverage=coverage,findings=findings,max_gap_seconds=MAX_GAP,warning='Picchi e soglie sono indizi da verificare nei log. RTT non localizza da solo la rete guasta; la somma dei buffer non misura il ritardo conversazionale. Unità KPE raw escluse.')
+ return dict(network=network,incidents=audio_episodes,incident_warnings=incident_warnings,window=dict(start=lower,end=upper),series=series,coverage=coverage,findings=findings,max_gap_seconds=MAX_GAP,warning='Picchi e soglie sono indizi da verificare nei log. RTT non localizza da solo la rete guasta; la somma dei buffer non misura il ritardo conversazionale. Unità KPE raw escluse.')
 

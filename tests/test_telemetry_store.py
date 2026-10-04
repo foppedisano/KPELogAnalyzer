@@ -182,7 +182,7 @@ class TelemetryStoreTests(unittest.TestCase):
             remove_periodic_schema(self.db)
             self.db.execute("UPDATE meta SET value='7' WHERE key='schema_version'")
         init(self.db)
-        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'11')
+        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'12')
         self.assertEqual(self.db.execute('SELECT id FROM events').fetchall(),ids)
         self.assertEqual(self.db.execute('SELECT note FROM conversations').fetchone()[0],'keep')
         old=sqlite3.connect(str(self.path)+'.pre-v8.bak')

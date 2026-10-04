@@ -49,11 +49,12 @@ Le derivazioni sono escluse quando mancano unità, identità o riferimenti affid
 | telemetry_records, telemetry_evidence | Eventi canonici e tutte le copie originali |
 | telemetry_intervals, telemetry_geo_context | Finestre verificate e contesto delle osservazioni strutturate |
 | import_producers, duplicate_perspectives, import_call_skips | Identità del produttore, copie storiche e chiamate ignorate ([regola](source-dedup.md)) |
+| connectivity_events, user_attempts | Evidenze rete/servizi e richieste utente, separate dall’identità SIP |
 | meta | Versione schema e marker idempotenti di elaborazione |
 
 ### Migrazioni
 
-Lo schema corrente è **11**. Le migrazioni successive preservano ID grezzi e
+Lo schema corrente è **12**. Le migrazioni successive preservano ID grezzi e
 annotazioni. Su DB popolati producono backup consistenti pre-vN; un backup
 omonimo non viene sovrascritto. Servono spazio per backup e arricchimenti.
 Le istruzioni sotto sulle singole versioni descrivono la storia dello schema;
@@ -68,6 +69,7 @@ non vanno interpretate come versioni alternative oggi supportate dal frontend.
 | 5→6 | Archivio geografico posizione–MOS |
 | 6→7 | Rete e sequenze di movimento |
 | 7→8 | Archivio canonico telemetria e intervalli verificati |
+| 11→12 | Tentativi utente e osservazioni di connettività ([metodo e backup](connectivity.md)) |
 | 8→9 | Identità sorgente e deduplicazione delle chiamate tradizionali |
 
 Prima di aggiornare: **Esporta database**, conserva la copia localmente,
@@ -77,7 +79,7 @@ un DB aperto. [Procedura operativa](getting-started.md).
 
 ## Riferimento tecnico dettagliato
 
-## Modello base dei dati (schema 11)
+## Modello base dei dati (schema 12)
 
 | Table | Meaning | Relations |
 |---|---|---|

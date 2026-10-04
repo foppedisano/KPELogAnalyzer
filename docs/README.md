@@ -42,7 +42,7 @@ Checkpoint corrente: [4 ottobre 2026](checkpoint-2026-10-04.md).
 - [Limiti e lavoro futuro](open-issues.md): confine tra funzioni implementate e proposte.
 - [Verifiche](validation.md): stato recente e cronologia dei collaudi.
 
-Lo schema SQLite corrente è **11**; il contratto di telemetria consigliato per i
+Lo schema SQLite corrente è **12**; il contratto di telemetria consigliato per i
 nuovi emitter è **kpe.telemetry/1.1**, con v1 ancora accettato. Sono numeri di
 versione di oggetti diversi. Il parser comunica la propria versione in `/api/health`.
 
@@ -53,3 +53,5 @@ La [guida al media plane VDK](media-plane.md) distingue VID/VOD, le specializzaz
 ## Profili temporali delle zone
 
 Per la metrica MOS, il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.
+
+- [Tentativi utente e rete/servizi](connectivity.md): blocchi prima del SIP, ragioni osservate, timeline per secondo e migrazione 12.

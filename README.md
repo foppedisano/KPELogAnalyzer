@@ -63,6 +63,13 @@ I dati persistono nel volume `kpe-data`, anche dopo `down`. Per una porta divers
 - Raggruppare più tratte in una conversazione/conferenza e indicare l'app host con una nota di evidenza.
 - Eseguire SQL in sola lettura ed esportare una fotografia consistente del database.
 
+## Tentativi utente e connettività
+
+Il registro include anche richieste utente e blocchi prima del SIP, con ragioni ed
+evidenze. **Rete e servizi** permette di esaminare ogni secondo, anche fuori call;
+i grafici distinguono raggiungibilità, CTI, SIP e stato KPE.
+[Metodo, limiti e aggiornamento](docs/connectivity.md).
+
 ## Grafici della chiamata e del confronto
 
 [Aggiungi metriche](docs/call-chart.md) permette selezione multipla e ricerca,

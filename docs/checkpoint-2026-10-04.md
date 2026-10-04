@@ -1,6 +1,6 @@
 # Checkpoint — 4 ottobre 2026
 
-Stato consolidato di codice e documentazione. Schema SQLite **11**; nessuna
+Stato consolidato di codice e documentazione. Schema SQLite **12**; nessuna
 nuova migrazione distruttiva. Python standard library, SQLite e frontend senza
 dipendenze di rete obbligatorie. Pubblicazione senza licenza concessa.
 
@@ -48,7 +48,7 @@ ed esclusi dal repository.
 
 ## Verifiche e limiti
 
-Suite completa: **201 test Python** superati. Verifiche browser su caricamento
+Suite completa: **210 test Python** superati. Verifiche browser su caricamento
 ZIP sintetici in istanza isolata, dettaglio chiamata, cambio sorgente, metriche,
 confronto e percorso aggiornato; controlli sintattici JavaScript e scale.
 Backfill eseguito sull’intero archivio locale: confronto con backup senza
@@ -59,3 +59,33 @@ dell’età del fix. Alimentano PQ/percorso; il MOS geografico persistito mantie
 le fonti precedenti. I collegamenti visuali si interrompono oltre 30 s e non
 ricostruiscono il tragitto reale. PQ non è un MOS percettivo validato. Ambiguità
 fra chiamate, lettori o posizioni restano esplicite.
+
+## Aggiornamento: tentativi utente e connettività
+
+- Registro esteso alle richieste esplicite dell’utente, anche prima del SIP,
+  con ragione osservata e riferimenti alle evidenze. Le copie identiche fra
+  export della stessa sorgente sono deduplicate nella visualizzazione.
+- Richieste e sessioni restano distinte senza una correlazione certa: non sono
+  un conteggio di chiamate uniche. La pagina mostra chiamate ricostruite,
+  tentativi elencati e totale voci, coerente con il badge laterale.
+- Vista Rete e servizi e bande nei grafici, con livelli separati per dispositivo,
+  STUN, CTI, SIP, media e applicazione. Interrogazione al secondo e provenienza
+  evento/file/riga. Verde UP, giallo transiente, rosso DOWN, grigio sconosciuto.
+- Le osservazioni scadono dopo 30 secondi. Un servizio raggiungibile non prova
+  che tutti gli altri funzionino; un rifiuto SIP prova raggiungibilità, non
+  assenza di problemi applicativi. Nessuna causalità di rete inventata.
+- Schema 12: tabelle additive, backup automatico consistente pre-v12,
+  arricchimento storico idempotente `connectivity-2`; ID e annotazioni preservati.
+  Istruzioni e limiti in [Tentativi e connettività](connectivity.md).
+
+Verifiche finali: 210 test Python superati, sintassi JavaScript e diff verificati;
+importazione sintetica, dettaglio, metriche, confronto, diagnostica e MOS nel
+browser. Persistenza del contenitore sintetico confermata dopo riavvio.
+Applicazione locale verificata su http://127.0.0.1:8080/ con health positivo;
+contenitore di collaudo arrestato. Database e backup restano esclusi da Git.
+
+Nota operativa: Docker Desktop ha incontrato socket temporanei inaccessibili
+all’avvio (`dockerInference` e `engine.sock`). Le sole cartelle runtime sono
+state conservate con un nuovo nome e ricreate, senza reset o modifiche ai volumi.
+Il servizio è ripartito ed è stato verificato healthy. Non è una correzione
+permanente di Docker; in caso di ricorrenza verificare prima i suoi log.

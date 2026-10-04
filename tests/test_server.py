@@ -38,6 +38,25 @@ class APITests(unittest.TestCase):
     def upload(self,files=None):
         return self.request('POST','/api/imports',archive(files or sample()),{'X-Filename':'synthetic.zip'})
 
+    def test_connectivity_attempts_and_bounded_events(self):
+        self.assertEqual(self.request('GET','/connectivity.js')[0],200)
+        from tests.test_connectivity import app_line
+        files=sample()
+        files['App.log']=app_line(3,'Calling number: synthetic-target')+app_line(3,'KPE is not ready yet... the call cannot be established')
+        self.assertEqual(self.upload(files)[0],201)
+        code,calls=self.request('GET','/api/calls?attempts=1')
+        self.assertEqual(code,200)
+        attempt=next(c for c in calls if c['row_type']=='user_attempt')
+        self.assertEqual(attempt['status'],'blocked')
+        self.assertLess(attempt['id'],0)
+        cid=next(c['id'] for c in calls if c['id']>0)
+        code,data=self.request('GET',f'/api/connectivity?calls={cid}')
+        self.assertEqual(code,200);self.assertIn('network',data[0]['lanes'])
+        self.assertEqual(self.request('GET','/api/connectivity?import=1&start=2026-01-01&end=2026-01-03')[0],400)
+        self.assertEqual(self.request('GET','/api/connectivity?calls=-1')[0],400)
+        code,data=self.request('GET','/api/events?import=1&start=2026-01-01%2012:00:03&end=2026-01-01%2012:00:04')
+        self.assertEqual(code,200);self.assertEqual(len(data['events']),2)
+
     def test_structured_telemetry_api_and_mixed_mos_csv(self):
         from tests.test_telemetry_store import events
         structured=events()

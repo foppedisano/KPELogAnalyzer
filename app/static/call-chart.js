@@ -32,7 +32,7 @@ function chartScale(values, unit) {
 }
 
 async function mountMultiChart(root, ids, initialMetric) {
-  const options = await api('metric-options?calls=' + ids.join(','));
+  const [options, network] = await Promise.all([api('metric-options?calls=' + ids.join(',')),api('connectivity?calls='+ids.join(','))]);
   if (!root.isConnected) return;
   registerMetricUnits(options);
   const selected = new Map(), cache = new Map(), hidden = new Set();
@@ -48,9 +48,13 @@ async function mountMultiChart(root, ids, initialMetric) {
     <div class="selected-metrics"></div><div class="chart-controls"><label>Allineamento<select class="chart-axis"><option value="relative">Tempo dalla prima evidenza</option><option value="absolute">Orario log + correzione</option></select></label><label class="check"><input type="checkbox" class="chart-invalid"> Mostra anomali</label><button class="zoom-out" aria-label="Riduci zoom temporale">−</button><button class="zoom-in" aria-label="Aumenta zoom temporale">+</button><button class="reset-zoom" title="Ripristina tutto l'intervallo temporale">Reset zoom</button></div>
     <label class="check"><input type="checkbox" class="chart-duplicates"> Mostra copie storiche della stessa sorgente</label>
     <p class="muted">Di norma ogni sorgente compare una volta per chiamata; flussi e SSRC distinti restano separati. Una scala per unità; le metriche raw restano separate. La rotella scorre la pagina. Ctrl + rotella ingrandisce intorno al puntatore; i pulsanti − e + agiscono al centro. Lo zoom è comune a tutti i pannelli. Clic sulla legenda per nascondere una curva. RTT = andata e ritorno, non ritardo audio.</p>
-    <p class="chart-status" role="status"></p><p class="chart-notes muted"></p><div class="multi-panels"></div><div class="multi-readout" aria-live="off">Passa sul grafico per leggere i campioni e le evidenze.</div><div class="metric-statistics"></div><div class="metric-episodes"></div>
+    <p class="muted">Sfondo rete: verde = UP osservato, giallo = transiente/parziale, rosso = DOWN osservato, grigio = non determinabile. Fasce verticali separate per prospettiva nell’ordine della sezione Rete e servizi. Le risposte di un servizio non garantiscono gli altri.</p><p class="chart-status" role="status"></p><p class="chart-notes muted"></p><div class="multi-panels"></div><div class="multi-readout" aria-live="off">Passa sul grafico per leggere i campioni e le evidenze.</div><div class="metric-statistics"></div><div class="metric-episodes"></div>
     </div></div>`;
   const titleFor = value => options.find(o => o.value === value)?.title || value;
+  const netPanel=document.createElement('div');root.append(netPanel);
+  await mountConnectivity(netPanel,{calls:ids.join(',')},network);
+  if(!root.isConnected)return;
+  const netX=(source,ts)=>$('.chart-axis',root).value==='absolute'?timeValue(ts)+source.clock_offset*1000:timeValue(ts)-timeValue(source.start);
   const unitsFor = value => {
     const [name, direction] = value.split('|');
     const observed = [...new Set(points.filter(p => p.name === name && (!direction || p.direction === direction)).map(p => p.unit))];
@@ -93,7 +97,7 @@ async function mountMultiChart(root, ids, initialMetric) {
       const circle = document.createElementNS(svg.namespaceURI,'circle'); for (const [k,v] of Object.entries({cx:6,cy:6,r:5,fill:s.color})) circle.setAttribute(k,v); svg.append(circle); $('.series-dot',b).replaceWith(svg);
       b.onclick = () => {hidden.has(s.key) ? hidden.delete(s.key) : hidden.add(s.key); b.classList.toggle('disabled',hidden.has(s.key)); b.setAttribute('aria-pressed',!hidden.has(s.key)); draw(); readout(); statistics();};
     });
-    $$('canvas',root).forEach(canvas => {
+    $$('canvas[data-panel]',root).forEach(canvas => {
       const fraction = e => Math.max(0, Math.min(1, (e.offsetX-Number(canvas.dataset.plotLeft))/(Number(canvas.dataset.plotRight)-Number(canvas.dataset.plotLeft))));
       canvas.onwheel = e => {if (!e.ctrlKey || !bounds) return; e.preventDefault(); if (e.deltaY) changeZoom(e.deltaY > 0 ? 1.4 : .7, fraction(e));};
       canvas.onmousemove = e => {if (!bounds) return; cursor = bounds[0]+fraction(e)*(bounds[1]-bounds[0]); draw(); readout();};
@@ -131,6 +135,7 @@ async function mountMultiChart(root, ids, initialMetric) {
       const left=Math.max(85,34+Math.max(...scale.ticks.map(v=>ctx.measureText(tickLabel(v)).width))),right=w-20,top=15,bottom=h-35, sx=x=>left+(x-bounds[0])/(bounds[1]-bounds[0])*(right-left);
       canvas.dataset.plotLeft=left;canvas.dataset.plotRight=right;
       const sy=y=>bottom-(y-scale.low)/(scale.high-scale.low)*(bottom-top);
+      drawNetBands(ctx,network,bounds,sx,top,bottom-top,netX);
       ctx.font='11px Segoe UI'; ctx.fillStyle='#526474';
       ctx.save();ctx.translate(13,(top+bottom)/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillText(metricUnitLabel(panel.ss[0].ps[0].unit),0,0);ctx.restore();
       for(const tick of scale.ticks) {const y=sy(tick); ctx.strokeStyle='#e3e9ed'; ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();ctx.textAlign='right';ctx.fillText(tick.toLocaleString('it-IT',{maximumSignificantDigits:10}),left-8,y+4);}
@@ -153,7 +158,7 @@ async function mountMultiChart(root, ids, initialMetric) {
       const p=s.ps.find(p=>p.valid_until&&xvalue(p)<=cursor&&end(p)>cursor)||s.ps.reduce((best,p)=>!best||Math.abs(xvalue(p)-cursor)<Math.abs(xvalue(best)-cursor)?p:best,null);
       const present=p&&(p.valid_until?xvalue(p)<=cursor&&end(p)>cursor:Math.abs(xvalue(p)-cursor)<=2500);
       return `<p><strong>${esc(seriesLabel(s.ps[0]))}</strong>: ${present?`${esc(number(p.value))} ${esc(metricUnitLabel(p.unit))}${p.valid?'':' · ANOMALO'} · ${esc(stamp(p.ts))}<br>${esc(p.filename)}:${esc(p.line_no)}${p.interval_seconds?' · intervallo '+esc(number(p.interval_seconds))+' s':''}${p.valid_until?' · valido fino a '+esc(p.valid_until):''}${p.evidence?'<br>'+p.evidence.map(e=>`evento ${esc(e.event_id)} · ${esc(e.filename)}:${esc(e.line)}`).join(' · '):''}`:'nessun campione (tolleranza ±2,5 s per i punti; intervallo effettivo per MOS)'}</p>`;
-    }).join('');
+    }).join('')+network.map(source=>`<details><summary>Rete · P${source.perspective_id} · ${esc(source.label)}</summary>${netReadout(source,$('.chart-axis',root).value==='absolute'?cursor-source.clock_offset*1000:cursor+timeValue(source.start))}</details>`).join('');
   }
   async function load(){
     const own=++generation; $('.chart-status',root).textContent='Caricamento metriche…';

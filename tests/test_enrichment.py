@@ -73,7 +73,7 @@ class EnrichmentTests(unittest.TestCase):
   self.assertEqual(self.db.execute('SELECT clock_offset FROM imports').fetchone()[0],2.5)
   self.assertEqual(self.db.execute('SELECT id FROM calls').fetchone()[0],8)
   self.assertEqual(self.db.execute('SELECT note FROM conversations').fetchone()[0],'Evidence')
-  self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'11')
+  self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'12')
   init(self.db)
 
  def test_offsets_affect_overlap_without_changing_raw_timestamps(self):

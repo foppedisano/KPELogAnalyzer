@@ -398,6 +398,8 @@ def ingest(db, data, name, label=''):
         enrich_geo(db, iid)
         from .mobility import enrich as enrich_mobility
         enrich_mobility(db, iid)
+        from .connectivity import enrich as enrich_connectivity
+        enrich_connectivity(db, iid)
         from .telemetry_store import ingest as ingest_telemetry
         ingest_telemetry(db, iid)
         save(db,iid,identity)

@@ -64,7 +64,7 @@ def connect(db_path=None):
 def init(db):
     db.executescript(SCHEMA)
     version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-    if version not in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'):
+    if version not in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'):
         raise RuntimeError('Unsupported database schema; back up the database before upgrading')
     if version == '1':
         filename = db.execute('PRAGMA database_list').fetchone()[2]
@@ -252,6 +252,24 @@ def init(db):
         except Exception:
             db.rollback()
             raise
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '11':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT COUNT(*) FROM imports').fetchone()[0]:
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v12.bak')
+            if backup.exists():
+                raise RuntimeError(f'Backup already exists: {backup}; preserve or rename before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        from .connectivity import SCHEMA as CONNECTIVITY_SCHEMA
+        try:
+            db.executescript("BEGIN IMMEDIATE;" + CONNECTIVITY_SCHEMA + "UPDATE meta SET value='12' WHERE key='schema_version'; COMMIT;")
+        except Exception:
+            db.rollback()
+            raise
     from .enrichment import enrich_pending
     enrich_pending(db)
     from .geography import pending
@@ -262,6 +280,8 @@ def init(db):
     telemetry_pending(db)
     from .source_dedup import pending as source_pending
     source_pending(db)
+    from .connectivity import pending as connectivity_pending
+    connectivity_pending(db)
 
 
 def rows(db, sql, args=()):

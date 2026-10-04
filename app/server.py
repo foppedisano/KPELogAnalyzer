@@ -96,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
             def q(key, default=''):
                 return query.get(key,[default])[0]
             if method == 'GET' and not path.startswith('/api/'):
-                mapping = {'/analytics-ui.js':'analytics-ui.js','/':'index.html','/app.js':'app.js','/call-chart.js':'call-chart.js','/geography.js':'geography.js','/basemap.json':'basemap.json','/mos.js':'mos.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
+                mapping = {'/connectivity.js':'connectivity.js','/analytics-ui.js':'analytics-ui.js','/':'index.html','/app.js':'app.js','/call-chart.js':'call-chart.js','/geography.js':'geography.js','/basemap.json':'basemap.json','/mos.js':'mos.js','/diagnostics.js':'diagnostics.js','/analysis-ui.js':'analysis-ui.js','/topology.js':'topology.js','/conversations.js':'conversations.js','/style.css':'style.css'}
                 if path not in mapping:
                     return self.send({'error':'Non trovato'},404)
                 filename = mapping[path]
@@ -180,7 +180,18 @@ class Handler(BaseHTTPRequestHandler):
                         FROM calls c WHERE c.caller LIKE ? OR c.callee LIKE ? OR COALESCE(c.sip_call_id,'') LIKE ?
                         ORDER BY c.start DESC LIMIT 2000""", ('%'+q('search')+'%',)*3)
                     summaries = call_summaries(db, [c['id'] for c in calls])
-                    return self.send([dict(c,mos=summaries[c['id']]) for c in calls])
+                    from .connectivity import attempts, reasons
+                    reasons(db, calls)
+                    result = [dict(c,mos=summaries[c['id']]) for c in calls]
+                    if q('attempts') == '1':
+                        result += attempts(db, q('search'))
+                        result.sort(key=lambda c: c['start'] or '', reverse=True)
+                    return self.send(result)
+                if path == '/api/connectivity':
+                    from .connectivity import timeline, for_calls
+                    if q('calls'):
+                        return self.send(for_calls(db, [int(x) for x in q('calls').split(',') if x]))
+                    return self.send(timeline(db, int(q('import')), q('start'), q('end')))
                 if path == '/api/perspectives':
                     return self.send(decorate(db,rows(db,'''SELECT p.*,i.label,i.clock_offset,
                         (SELECT version FROM app_versions v WHERE v.import_id=p.import_id AND v.ts<=p.start ORDER BY v.ts DESC,v.event_id DESC LIMIT 1) app_version,
@@ -205,6 +216,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(dict(summary=summary,invalid_metrics=invalid,error_events=errors,signaling=signaling[:500],truncated=len(signaling)>500))
                 if path == '/api/events':
                     clauses,args = [],[]
+                    for key, operator in [('start','>='),('end','<=')]:
+                        if q(key):
+                            clauses.append('e.ts'+operator+'?'); args.append(q(key))
                     for key,column in [('call','e.call_id'),('file','e.file_id'),('import','e.import_id'),('perspective','e.perspective_id')]:
                         if q(key):
                             clauses.append(column+'=?'); args.append(int(q(key)))

@@ -32,6 +32,9 @@ async function renderMos(page, renderId) {
       result=data; window.mosLocal=+local;
       const basis={local:'ricezione locale',peer_local_reused:'ricezione locale del lato opposto riutilizzata',remote_rtcp:'stima dai Receiver Report remoti'};
       $('#mos-result',page).innerHTML=`<p>${esc(data.model.description)} G.711 · 10 ms · PLC Appendix I · ${esc(data.model.version)}</p><h2>Downstream · ${basis[data.downstream_basis]}</h2>${chart(data.downstream)}<h2>Upstream · ${basis[data.upstream_basis]}</h2>${chart(data.upstream)}<p>${data.limitations.map(esc).join(' ')}</p><h2>Evidenze dei ricevitori</h2><p>Delta silenzio in ms; rapporto sulla durata osservata, non percentuale di voce persa. Missing packets non sommati alla perdita RTCP. Prime 300 osservazioni; JSON completo.</p><div class="table-wrap"><table><thead><tr><th>Ricevitore</th><th>Orario</th><th>Parametro</th><th>Valore</th><th>Contesto / evidenza</th></tr></thead><tbody>${data.context.slice(0,300).map(m=>`<tr><td>P${m.perspective_id} · ${m.perspective_id===+local?role:(role==='app'?'gw':'app')}</td><td>${esc(m.ts)}</td><td>${esc(m.name)} · ${esc(m.direction)} · ${esc(m.device||m.flow)}</td><td>${number(m.value)} ${esc(m.unit)}${m.name==='derived.silence_delta'?` · ${number(m.value/(m.interval_seconds*10))}% su ${number(m.interval_seconds)} s`:''}</td><td>${esc(proof(m))}</td></tr>`).join('')}</tbody></table></div>`;
+      const netRoot=document.createElement('div');$('#mos-result',page).append(netRoot);
+      await mountConnectivity(netRoot,{calls:[...new Set([local,peer].filter(Boolean).map(id=>ps.find(p=>p.id===+id)?.call_id).filter(Boolean))].join(',')});
+      if(renderId!==renderToken || token!==request || !page.isConnected)return;
       $('#mos-export',page).disabled=false;
     } catch(e) {if(renderId===renderToken && token===request && $('#mos-result',page)) $('#mos-result',page).textContent=e.message;}
   }

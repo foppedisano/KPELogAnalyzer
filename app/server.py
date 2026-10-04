@@ -114,7 +114,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(tile(q('z'),q('x'),q('y'),self.headers.get('Referer','http://127.0.0.1:8080/')),mime='image/png')
                 if path == '/api/geography':
                     from .geography import aggregate
-                    return self.send(aggregate(db,{k:q(k) for k in ('cell','direction','quality','start','end','platform','access','upstream','operator') if q(k)}))
+                    return self.send(aggregate(db,{k:q(k) for k in ('metric','cell','direction','quality','start','end','platform','access','upstream','operator') if q(k)}))
+                if path == '/api/call-route':
+                    from .call_route import route
+                    return self.send(route(db,int(q('call')),int(q('perspective')) if q('perspective') else None,int(q('cell','50'))))
                 if path == '/api/telemetry':
                     from .telemetry_store import status
                     return self.send(status(db))
@@ -170,13 +173,14 @@ class Handler(BaseHTTPRequestHandler):
                 if path == '/api/files':
                     return self.send(rows(db,'SELECT f.*,i.label FROM files f JOIN imports i ON i.id=f.import_id ORDER BY f.import_id,f.name'))
                 if path == '/api/calls':
-                    from .mos import call_summary
+                    from .mos import call_summaries
                     calls = rows(db,"""SELECT c.*, (SELECT COUNT(*) FROM perspectives p WHERE p.call_id=c.id) perspectives,
                         (SELECT COUNT(*) FROM metrics m WHERE m.call_id=c.id) metrics,
                         (SELECT group_concat(DISTINCT status) FROM perspectives p WHERE p.call_id=c.id) status
                         FROM calls c WHERE c.caller LIKE ? OR c.callee LIKE ? OR COALESCE(c.sip_call_id,'') LIKE ?
                         ORDER BY c.start DESC LIMIT 2000""", ('%'+q('search')+'%',)*3)
-                    return self.send([dict(c,mos=call_summary(db,c['id'])) for c in calls])
+                    summaries = call_summaries(db, [c['id'] for c in calls])
+                    return self.send([dict(c,mos=summaries[c['id']]) for c in calls])
                 if path == '/api/perspectives':
                     return self.send(decorate(db,rows(db,'''SELECT p.*,i.label,i.clock_offset,
                         (SELECT version FROM app_versions v WHERE v.import_id=p.import_id AND v.ts<=p.start ORDER BY v.ts DESC,v.event_id DESC LIMIT 1) app_version,

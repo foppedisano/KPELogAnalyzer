@@ -206,3 +206,20 @@ Esempio di richiesta MCP: «Distingui per questa chiamata scheduling dei thread,
 ## Profili temporali delle zone
 
 Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.
+
+
+## Perceptual Quality e percorso chiamata
+
+- `GET /api/metrics?calls=1&name=derived.perceptual_quality`: finestre AWT 0–100,
+  con `window_ts`, `ts`, `valid_until`, `observed_ms`, `underrun_ms`,
+  `underrun_percent`, `end_basis` e prove; anche `format=csv`.
+- `GET /api/geography?metric=perceptual&cell=50&quality=declared`: celle PQ;
+  `quality=fresh` esclude dichiarazioni SIP e configurazioni locali iOS.
+  La metrica MOS resta disponibile con `metric=mos` (default dell’API).
+- `GET /api/call-route?call=1&perspective=1&cell=50`: selezione sorgente,
+  punti cronologici, segmenti, celle e prove. `perspective` è facoltativa e deve
+  appartenere alla chiamata ed essere una prospettiva app non duplicata.
+  Massimo 10.000 posizioni. `sip_config` identifica gli aggiornamenti locali
+  degli header, con età del fix non verificata. Nessuna fusione dei percorsi.
+
+[Metodo, denominatori e limiti](perceptual-quality.md).

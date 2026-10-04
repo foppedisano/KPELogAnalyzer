@@ -19,6 +19,9 @@ async function renderAnalytics(page, token) {
     <label>Selezione JSON (vuota = tutte le chiamate)<textarea id="analytics-scope" rows="3" spellcheck="false">{}</textarea></label></div>
     <div class="actions"><label class="analytics-check"><input type="checkbox" id="analytics-mos"> Calcola intervalli ed episodi MOS</label>
     <label class="analytics-check"><input type="checkbox" id="analytics-incidents"> Calcola episodi audio e finestre</label>
+    <label class="analytics-check"><input type="checkbox" id="analytics-incident-summary"> Riepilogo episodi dell’archivio</label>
+    <label class="analytics-check"><input type="checkbox" id="analytics-transients"> Confronta contatori e transitori</label>
+    <label>Tolleranza transitori (s)<input id="analytics-tolerance" type="number" value="0" min="0" max="30" step="0.1"></label>
     <label>Finestra episodi (s)<input id="analytics-window" type="number" value="1" min="0.001" max="3600" step="0.001"></label>
     <label>Collocazione underrun<select id="analytics-placement"><option value="reported_end">Durata dichiarata, ancorata alla fine</option><option value="log_span">Timestamp dei messaggi</option></select></label>
     <label>MOS scarso sotto<input id="analytics-threshold" type="number" value="3" min="1" max="5" step="0.1"></label>
@@ -40,13 +43,15 @@ async function renderAnalytics(page, token) {
     el("scope").value=JSON.stringify(definition.scope||{},null,2);
     el("mos").checked=(definition.datasets||[]).includes("mos");
     el("incidents").checked=(definition.datasets||[]).includes("incidents");el("window").value=definition.incident_window_seconds??1;el("placement").value=definition.incident_time_basis||"reported_end";
+    el("incident-summary").checked=(definition.datasets||[]).includes("incident_summary");
+    el("transients").checked=(definition.datasets||[]).includes("transients");el("tolerance").value=definition.transient_tolerance_seconds??0;
     el("threshold").value=definition.threshold??3;el("minimum").value=definition.min_episode_seconds??0;
     el("limit").value=definition.limit??200;el("update").disabled=!recipe;
     el("status").textContent=recipe?`Ricetta #${recipe.id} · revisione ${recipe.revision}`:"Nuova analisi";
     el("result").replaceChildren();last=null;el("export").disabled=true;
   }
   const definition=()=>({sql:el("sql").value,parameters:JSON.parse(el("parameters").value),scope:JSON.parse(el("scope").value),
-    datasets:[...(el("mos").checked?["mos"]:[]),...(el("incidents").checked?["incidents"]:[])],incident_window_seconds:+el("window").value,incident_time_basis:el("placement").value,threshold:+el("threshold").value,min_episode_seconds:+el("minimum").value,limit:+el("limit").value});
+    datasets:[...(el("mos").checked?["mos"]:[]),...(el("incidents").checked?["incidents"]:[]),...(el("incident-summary").checked?["incident_summary"]:[]),...(el("transients").checked?["transients"]:[])],transient_tolerance_seconds:+el("tolerance").value,incident_window_seconds:+el("window").value,incident_time_basis:el("placement").value,threshold:+el("threshold").value,min_episode_seconds:+el("minimum").value,limit:+el("limit").value});
   el("load-example").onclick=()=>{recipe=null;const e=catalog.examples[+el("example").value];load(e,e.title);};
   el("load-saved").onclick=()=>{const found=saved.items.find(r=>r.id===+el("saved").value);if(found){recipe=found;load(found.definition,found.title,found.question);}};
   async function busy(action) {

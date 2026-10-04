@@ -1,5 +1,10 @@
 # Mappa qualità e archivio geografico
 
+La metrica iniziale della mappa è ora **Perceptual Quality (AWT), 0–100**:
+[finestre da un secondo, copertura e associazione puntuale](perceptual-quality.md).
+MOS rimane selezionabile. Le regole di mantenimento della posizione e media
+MOS descritte sotto riguardano esclusivamente il percorso MOS.
+
 [Indice](README.md) · [Come leggere il MOS](mos.md) · [Logica della piattaforma](platform-guide.md)
 
 La mappa descrive **qualità osservata e copertura**, non qualità prevista.

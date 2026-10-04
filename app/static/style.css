@@ -915,3 +915,10 @@ fieldset { border:1px solid var(--line);border-radius:8px;margin:16px 0;padding:
 .gt-heat-cell{padding:10px 2px;border:1px solid transparent;color:#102d3c;border-radius:3px}.gt-heat-cell.limited{border:1px dashed #7895a6}
 .gt-trend{display:block;width:100%;height:auto;max-height:230px;font-size:12px}.geo-temporal .geo-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:700px){.geo-temporal{padding:14px}.geo-temporal .geo-stats{grid-template-columns:1fr}.geo-temporal .geo-date-controls{flex-wrap:wrap}}
+
+#upload-meters progress { display: block; width: 100%; height: 14px; margin: 8px 0 16px; accent-color: var(--accent, #168b80); }
+#dropzone[aria-disabled=true] { opacity: .6; cursor: wait; }
+
+.call-route-panel { margin: 24px 0; }
+.call-route-panel [hidden] { display: none !important; }
+.call-route-panel #route-point { max-width: 360px; }

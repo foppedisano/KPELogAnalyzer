@@ -71,6 +71,23 @@ def call_summary(db, call_id):
         JOIN imports i ON i.id=p.import_id LEFT JOIN observation_roles r ON r.perspective_id=p.id
         WHERE p.call_id=? AND p.id NOT IN (SELECT perspective_id FROM effective_duplicates)
         ORDER BY p.import_id DESC,p.id DESC LIMIT 1''', (call_id,)).fetchone()
+    return _call_summary(db, call_id, p)
+
+
+def call_summaries(db, ids):
+    """Resolve duplicate exclusions and latest source once for the register."""
+    if not ids: return {}
+    selected = {}
+    for p in db.execute('''SELECT p.*,i.label,r.role FROM perspectives p
+        JOIN imports i ON i.id=p.import_id LEFT JOIN observation_roles r ON r.perspective_id=p.id
+        WHERE p.call_id IN ('''+','.join('?' for _ in ids)+''')
+        AND p.id NOT IN (SELECT perspective_id FROM effective_duplicates)
+        ORDER BY p.import_id DESC,p.id DESC''', ids):
+        selected.setdefault(p['call_id'], p)
+    return {cid: _call_summary(db, cid, selected.get(cid)) for cid in ids}
+
+
+def _call_summary(db, call_id, p):
     result = dict(downstream=None, upstream=None, reason='Nessuna prospettiva')
     if p is None:
         return result

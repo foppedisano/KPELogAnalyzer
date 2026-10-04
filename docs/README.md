@@ -4,6 +4,8 @@ La piattaforma legge log, conserva le evidenze e calcola indicatori verificabili
 Il MOS mostrato è un **indice basato sulla perdita a profilo fisso**: non riassume
 da solo tutta la qualità della rete o dell'audio.
 
+Checkpoint corrente: [4 ottobre 2026](checkpoint-2026-10-04.md).
+
 ## Percorso consigliato
 
 1. [Installazione e aggiornamento](getting-started.md): Docker, URL locale, backup.
@@ -22,6 +24,8 @@ da solo tutta la qualità della rete o dell'audio.
 | Confrontare due osservazioni e salvare l'analisi | [Diagnostica A/B](diagnostics.md) |
 | Capire le due direzioni e usare il ricevitore GW | [Metodo MOS](mos.md) |
 | Vedere qualità, copertura e variazioni nel tempo per zona | [Mappa qualità](geography.md) |
+| Calcolare PQ, esplorare il percorso e recuperare posizioni iOS | [Perceptual Quality](perceptual-quality.md) |
+| Confrontare contatori audio e transitori | [Transitori](transients.md) |
 | Distinguere rete mobile, Wi-Fi, tethering e sequenze | [Movimento e rete](mobility.md) |
 | Raccogliere le tratte di una conversazione | [Conversazioni e piattaforme](conversations.md) |
 | Collegare esplicitamente app e transcoder | [App e xcoder](xcoder.md) |
@@ -48,4 +52,4 @@ La [guida al media plane VDK](media-plane.md) distingue VID/VOD, le specializzaz
 
 ## Profili temporali delle zone
 
-Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.
+Per la metrica MOS, il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.

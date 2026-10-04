@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from .db import rows
 from .incidents import incidents
 
-SINGLE_DERIVED = ('derived.mos_reference', 'derived.silence_delta', 'derived.silence_played_delta', 'incident.buffer_underrun', 'incident.media_missing')
+SINGLE_DERIVED = ('derived.perceptual_quality', 'derived.mos_reference', 'derived.silence_delta', 'derived.silence_played_delta', 'incident.buffer_underrun', 'incident.media_missing')
 
 
 def silence_delta(points, max_gap=30):
@@ -19,6 +19,9 @@ def silence_delta(points, max_gap=30):
 
 
 def calculate(db, ids, name):
+    if name == 'derived.perceptual_quality':
+        from .perceptual import calculate as perceptual
+        return perceptual(db, ids)
     if name == 'derived.mos_reference':
         from .mos import calculate as mos
         return mos(db, ids)
@@ -44,7 +47,7 @@ def calculate(db, ids, name):
             originals={m['id']:m for m in group}
             for d in silence_delta(points):
                 original=originals[d['evidence'][1]['metric_id']]
-                output.append(dict(original,name=name,value=d['value'],sample_kind='interval',
+                output.append(dict(original,name=name,value=d['value'],sample_kind='interval',raw_value=None,raw_unit=None,
                     interval_seconds=d['interval_seconds'],evidence=d['evidence'],extractor='derived-on-demand'))
         return sorted(output,key=lambda m:(m['ts'],m['id']))
     output=[]

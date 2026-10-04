@@ -127,9 +127,9 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
 
    if name != 'vd.silence_skipped':
 
-    findings.append(dict(side=side,name=name,peak=peak,threshold=rtt_threshold if name=='rtcp.rtt' else None,exceeded=name=='rtcp.rtt' and peak['value']>rtt_threshold,flow=flow,ssrc=ssrc,direction=direction,unit=unit,observer=observer,output_device=output_device,input_device=input_device,lifecycle=lifecycle))
+    findings.append(dict(side=side,name=name,device=dev,peak=peak,threshold=rtt_threshold if name=='rtcp.rtt' else None,exceeded=name=='rtcp.rtt' and peak['value']>rtt_threshold,flow=flow,ssrc=ssrc,direction=direction,unit=unit,observer=observer,output_device=output_device,input_device=input_device,lifecycle=lifecycle))
 
-   if name in ('vd.silence_skipped','vd.silence_played'):
+   if name in ('vd.silence_skipped','vd.silence_played') and unit == 'ms':
 
     from .single_metrics import silence_delta
     deltas=silence_delta(points,MAX_GAP)
@@ -138,7 +138,7 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
     derived='derived.silence_played_delta' if name=='vd.silence_played' else 'derived.silence_delta'
     series.append(dict(item,name=derived,kind='interval',points=deltas))
 
-    if deltas: findings.append(dict(side=side,name=derived,peak=max(deltas,key=lambda x:x['value']),resets=resets,unit="ms",direction=direction,observer=observer,output_device=output_device,input_device=input_device,lifecycle=lifecycle))
+    if deltas: findings.append(dict(side=side,name=derived,device=dev,kind='interval',peak=max(deltas,key=lambda x:x['value']),resets=resets,unit="ms",direction=direction,observer=observer,output_device=output_device,input_device=input_device,lifecycle=lifecycle))
 
   from .incidents import incidents
   audio=incidents(db,pid,device,offset,lower,upper)
@@ -152,7 +152,7 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
 
  for source,derived,title in [('vd.buffer','derived.buffer_sum','Audio nei buffer A+B'),('vd.dejitter_target','derived.dejitter_sum','Limiti dinamici A+B')]:
 
-  candidates=[[s for s in series if s['side']==side and s['name']==source] for side in ('A','B')]
+  candidates=[[s for s in series if s['side']==side and s['name']==source and s['unit']=='ms'] for side in ('A','B')]
   buffers=[ss[0] if len(ss)==1 else None for ss in candidates]
 
   if all(buffers):

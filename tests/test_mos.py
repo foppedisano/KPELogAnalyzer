@@ -1,4 +1,5 @@
 import math
+from contextlib import closing
 import unittest
 from app.mos import score
 from tests import test_server as fixture
@@ -10,6 +11,30 @@ class MosTests(unittest.TestCase):
     tearDown=fixture.APITests.tearDown
     upload=fixture.APITests.upload
     request=fixture.APITests.request
+
+    def test_register_batch_preserves_summaries_without_repeated_source_resolution(self):
+        from app.db import connect
+        from app.mos import call_summary, call_summaries
+        self.upload(sample())
+        self.upload(sample(cid='second-call'))
+        with closing(connect()) as db:
+            ids=[r[0] for r in db.execute('SELECT id FROM calls')]+[999]
+            expected={cid:call_summary(db,cid) for cid in ids}
+            queries=[]
+            db.set_trace_callback(queries.append)
+            self.assertEqual(call_summaries(db,ids),expected)
+            db.set_trace_callback(None)
+            self.assertEqual(sum('effective_duplicates' in q for q in queries),1)
+
+    def test_empty_telemetry_does_not_scan_legacy_metrics(self):
+        from app.db import connect
+        from app.telemetry_store import calculate
+        self.upload(sample())
+        with closing(connect()) as db:
+            queries=[]
+            db.set_trace_callback(queries.append)
+            self.assertEqual(calculate(db,[1]),[])
+            self.assertFalse(any('JOIN metrics' in q for q in queries))
 
     def test_call_summary_weighting_and_latest_export(self):
         f=sample(); f['rtplog.txt']=rtcp(5)+rtcp(10).replace('2%.','12%.')

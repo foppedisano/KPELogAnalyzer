@@ -1,5 +1,8 @@
 # Analisi conversazionali, API e MCP
 
+Per route audio, reset, silenzio iniziale e confronto contatori/transitori:
+[query unica, denominatori, evidenze e limiti](transients.md).
+
 [Indice](README.md) · [API](api.md) · [Metodo MOS](mos.md)
 
 Il coding agent interpreta la domanda, scopre i dati disponibili e compone una

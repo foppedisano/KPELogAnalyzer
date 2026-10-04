@@ -95,6 +95,12 @@
             Importa e analizza
           </button>
         </div>
+        <div id="upload-meters" hidden>
+          <label for="upload-total">Archivi elaborati <span id="upload-count"></span></label>
+          <progress id="upload-total" value="0" max="1"></progress>
+          <label for="upload-current">ZIP corrente: trasferimento / elaborazione</label>
+          <progress id="upload-current" value="0" max="100"></progress>
+        </div>
         <p id="upload-progress" role="status"></p>
       </form>
     </dialog>

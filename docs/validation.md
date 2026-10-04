@@ -199,3 +199,18 @@ Final Docker verification: container healthy on 127.0.0.1:8080, parser 1.2.0. An
 - Inventario del formato recente completato in sola lettura. Piano dei campi
   mancanti in periodic-metrics-implementation.md; implementazione ancora da fare.
 - Dati, grafici ed evidenze locali restano in data/ e non sono pubblicati.
+
+
+## PQ, percorsi, transitori e recupero posizioni — 4 ottobre 2026
+
+- 201 test Python superati: finestre parziali, episodi aperti, assenza AWT,
+  chiamate senza chiusura, conflitti, isolamento sorgenti, pattern iOS malformati,
+  deduplicazione e backfill storico idempotente con conservazione degli ID.
+- Browser: import ZIP sintetici in istanza separata, cambio sorgente, dettaglio,
+  metriche e confronto; percorso reale verificato con nuovi punti periodici e
+  riferimenti agli eventi. Nessun errore console nei flussi verificati.
+- Docker aggiornato e health verificato. Backup SQLite consistente prima del
+  backfill dell’intero archivio; chiamate, prospettive, eventi, metriche,
+  annotazioni e record geografici preesistenti preservati.
+- Risultati e materiale reale esclusi da Git. Guide, API, architettura e limiti
+  consolidati nel [checkpoint](checkpoint-2026-10-04.md).

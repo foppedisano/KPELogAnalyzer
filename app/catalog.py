@@ -1,5 +1,5 @@
 """Metric dictionary shared by API and documentation."""
-from .media_semantics import metric_semantics
+from .media_semantics import metric_semantics, metric_orientation
 CATALOG = [
  dict(name='telemetry.network_loss',title='Perdita RTP su intervallo verificato',unit='%',kind='interval',source='Telemetria strutturata: rtp-sequence-window/1 oppure delta dei contatori RTCP SR/RR.',meaning='Perdita riferita a una finestra esplicita, prima di PLC/FEC e scarti di playout. Timestamp UTC derivato dal tempo monotono; originali ed evidenze conservati.',limits='Contatori di arrivo e attesi non sono sottratti senza una coorte comune. Reset, conflitti, finestre sovrapposte e gap RTCP oltre 30 s escludono la derivazione. Non è una misura di qualità percepita. Per i report remoti il tempo è quello locale di osservazione dei report, non una sincronizzazione con il peer.'),
  dict(name='vd.missing_packets',title='Pacchetti mancanti per evento NART',unit='packets',kind='event',source='[NARTn of Line m] Packet loss occurred … SN delta is … (N missing packets)',meaning='Numero esplicito di pacchetti segnalati come mancanti in un singolo salto della sequenza. Un punto isolato al timestamp del messaggio.',limits='Non è una percentuale RTCP, un contatore cumulativo o una perdita definitiva: riordino, arrivi tardivi e recupero possono modificare l’esito. Non sommare segnalazioni come pacchetti unici persi. Device, linea e sorgente restano separati; nessun SSRC viene inventato. Rotazioni con identico timestamp e identico messaggio sono deduplicate; numeri di sequenza diversi restano eventi distinti.'),
@@ -104,6 +104,7 @@ _MEANINGS = {
 for entry in CATALOG:
     name=entry['name']
     entry['semantics']=metric_semantics(name)
+    entry['orientation']=metric_orientation(name)
     if name in _MEANINGS: entry['meaning']=_MEANINGS[name]
     if name in ('vd.media_read','vd.media_sent','vd.media_middleware'):
         entry['meaning']={'vd.media_read':'Durata cumulativa del media letto dal middleware.', 'vd.media_sent':'Durata cumulativa del media inviato in uscita.', 'vd.media_middleware':'Durata cumulativa del media inviato al middleware.'}[name]+' Non è tempo CPU, latenza o durata della chiamata. Usare ms solo con suffisso esplicito, altrimenti raw.'
@@ -120,12 +121,115 @@ for entry in CATALOG:
     if name.startswith('vd.'):
         entry['limits']+=' Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.'
 
+# Context and scope corrections: a field name is not a network topology.
+for entry in CATALOG:
+    name = entry['name']
+    if name in ('derived.silence_delta', 'derived.silence_played_delta'):
+        source = 'vd.silence_skipped' if name.endswith('silence_delta') else 'vd.silence_played'
+        entry['source'] = 'Differenza tra campioni consecutivi di ' + source + ', separati per prospettiva, observer, device, output, input, ciclo di vita, direzione, flow e SSRC; massimo 30 s e due eventi di evidenza.'
+        entry['limits'] += ' La direzione è quella del contesto originale: Default Audio Input → NAWT è elaborazione locale in trasmissione, non ricezione downstream. Il delta non prova silenzio del microfono, perdita RTP o audio effettivamente ascoltato dal peer.'
+    if name == 'derived.dejitter_sum':
+        entry['meaning'] = 'Somma dei limiti dinamici dei buffer dei due device scelti. Su NART riguarda il dejittering di ricezione; la selezione di altri device non dimostra quel percorso. Distinta dalla somma dell’audio realmente in coda.'
+    if name == 'vd.write_rate':
+        entry['title'] = 'Frequenza di scrittura dichiarata'
+        entry['meaning'] += ' Il campo si chiama Cumulative write rate, ma il valore è una frequenza (campioni/s), non un contatore da sommare.'
+    if name.startswith('vd.streak_'):
+        category = 'GOOD' if name.endswith('good') else 'BAD'
+        entry['title'] = 'Lunghezza dell’ultima sequenza RTP ' + category
+        entry['meaning'] = 'Numero di pacchetti nell’ultima sequenza ' + category + ' dichiarata dal motore. È la lunghezza di una sequenza, non il totale cumulativo dei pacchetti e non una percentuale di perdita. GOOD/BAD non dimostra qualità vocale.'
+    if name in ('rtcp.packets_sent_total', 'rtcp.packets_sent_interval'):
+        entry['meaning'] += ' Il mittente del dato è il peer remoto (Sender Report): pacchetti trasmessi non significa pacchetti ricevuti localmente.'
+    if name in ('rtcp.packets_lost_total', 'rtcp.packets_lost_interval'):
+        entry['meaning'] += ' Il ricevitore è il peer remoto (Receiver Report): non è un conteggio della perdita osservata localmente.'
+
+
+CATALOG.append(dict(name='derived.perceptual_quality', title='Perceptual Quality', unit='PQ', kind='interval',
+    source='AWT: Buffer underrun event terminated … Event was … msecs long; contatore silence msecs played out for buffer underruns.',
+    meaning='100 meno la percentuale di tempo in underrun AWT in finestre di un secondo, allineate all’orologio del log e ritagliate sulla parte attiva della chiamata ai confini. La percentuale usa la durata effettiva della finestra. 100 = nessun underrun ricostruito, 0 = tutta la finestra in underrun.',
+    limits='Indice operativo di continuità audio, non MOS né misura percettiva validata. Inizio/fine osservati; durata dichiarata come fallback. Log AWT assunto completo: fuori dagli episodi vale 100; episodi aperti attivi fino a fine chiamata o ricreazione. Senza chiusura registrata, copertura fino all’ultima evidenza attribuita alla stessa chiamata nella sorgente. Nessuna verifica dei contatori periodici. Durante la chiamata, nessun episodio registrato significa 100 anche senza heartbeat o contatori AWT. Eventuali episodi presenti ma non attribuibili restano ambigui. Posizione associata soltanto al secondo che contiene il suo timestamp; nessuna propagazione spaziale.',
+    semantics=metric_semantics('derived.perceptual_quality'), orientation=metric_orientation('derived.perceptual_quality')))
+
+UNIT_LABELS = {
+    'PQ': 'PQ · indice 0–100',
+    'ms': 'ms · millisecondi', 's': 's · secondi', 'us': 'µs · microsecondi',
+    '%': '% · percentuale', 'packets': 'pacchetti', 'count': 'conteggio',
+    'samples': 'campioni audio', 'samples/s': 'campioni audio/s',
+    'bytes': 'byte', 'chunks': 'chunk', 'MOS': 'MOS · indice senza unità',
+    'raw': 'raw · unità non confermata', '': 'unità non dichiarata',
+}
+
+
+def unit_label(unit):
+    return UNIT_LABELS.get(unit, unit + ' · unità non documentata')
+
+
+def describe_units(entry, units):
+    entry['units'] = sorted(set(units))
+    # Seconds are a presentation option only for the cumulative skipped silence.
+    display = entry['units'] + (['s'] if entry['name'] == 'vd.silence_skipped' else [])
+    entry['unit_labels'] = {u: unit_label(u) for u in display}
+    entry['unit_label'] = ' / '.join(unit_label(u) for u in entry['units'])
+    return entry
+
+
+# Exact unit-bearing fields for entries previously described only by a section title.
+UNIT_SOURCES = {
+    'vd.write_rate': 'Cumulative write rate is … samples per second',
+    'vd.scheduling_delay': 'Accumulated delay is … ms',
+    'vd.underrun_duration': 'Currently in underrun for this VOD since … msecs',
+    'vd.heartbeat_bytes_read': 'read bytes: … (heartbeat; finestra dei byte non confermata)',
+    'vd.heartbeat_bytes_written': 'written bytes … (heartbeat; finestra dei byte non confermata)',
+    'vd.heartbeat_window': 'Running cycles (last … ms)',
+    'rtcp.packets_sent_total': 'Sender Report - Number of packets sent by this remote peer (total)',
+    'rtcp.packets_sent_interval': 'Sender Report - Number of packets sent by this remote peer (since last report)',
+    'rtcp.packets_received_interval': 'Packet we received from this source (since last report)',
+    'rtcp.packets_lost_total': 'Receiver Report - pkt lost by this peer (total)',
+    'rtcp.packets_lost_interval': 'Receiver Report - pkt lost by this peer (since last report)',
+}
+
+# Audit of all numeric catalog entries against parser fields and derivations.
+for entry in CATALOG:
+    name = entry['name']
+    if name in UNIT_SOURCES:
+        entry['source'] = UNIT_SOURCES[name]
+    if name.startswith('vd.cycles_'):
+        entry['source'] = 'Running cycles: conteggio della fase ' + name.removeprefix('vd.cycles_') + '; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.'
+    if name in ('vd.silence_skipped', 'incident.media_missing'):
+        entry['unit'] = 'ms'
+    units = [entry['unit']]
+    entry['unit_note'] = 'Unità del valore nel grafico e nel CSV; origine: ' + entry['source']
+    if name in ('vd.media_read', 'vd.media_sent', 'vd.media_middleware'):
+        units = ['ms', 'raw']
+        entry['source'] += ': … ms (senza suffisso: raw)'
+        entry['unit_note'] = 'ms solo con suffisso esplicito nel campo originale; senza suffisso il valore resta raw. Le due unità non si convertono né si sovrappongono.'
+    elif entry['unit'] == 'raw':
+        entry['unit_note'] = 'Unità non confermata dal log: nessuna conversione in ms, µs o percentuale. Il nome della metrica non dimostra l’unità.'
+    elif name == 'derived.silence_played_delta':
+        entry['unit_note'] = 'Millisecondi (ms), non microsecondi: il contatore originale è “silence msecs played out for buffer underruns occurred on this ring for this VOD”. Differenza tra due osservazioni; non ms/s né percentuale. Esempio: 100 → 125 ms produce 25 ms.'
+    elif name == 'derived.silence_delta':
+        entry['unit_note'] = 'Millisecondi: differenza di vd.silence_skipped dopo la normalizzazione µs ÷ 1000, quando necessaria. È una durata nell’intervallo, non un tasso ms/s.'
+    elif name == 'vd.silence_skipped':
+        entry['unit_note'] = 'Durata cumulativa in ms; i campi usecs sono divisi per 1000, i campi msecs restano invariati. Solo Diagnostica A/B può visualizzare questo contatore in secondi (ms ÷ 1000); i delta restano in ms.'
+    elif name == 'incident.media_missing':
+        entry['unit_note'] = 'Durata in ms, con limite inferiore stimato dalle notifiche. “Minimo stimato” descrive la stima, non una diversa unità.'
+    describe_units(entry, units)
+
 
 def catalog(db):
- result = list(CATALOG)
- known = {x['name'] for x in result}
- for row in db.execute('SELECT DISTINCT name,unit FROM metrics ORDER BY name'):
-  if row['name'] not in known:
-   result.append(dict(name=row['name'],title=row['name'],unit=row['unit'],kind='reported statistic',source='Campo numerico estratto dal log; consultare evento originale.',meaning='Metrica non ancora documentata individualmente.',semantics=metric_semantics('unknown'),limits='Semantica e unità non confermate: nessuna diagnosi automatica.'))
-   known.add(row['name'])
- return result
+    result = [dict(entry) for entry in CATALOG]
+    known = {entry['name']: entry for entry in result}
+    observed = {}
+    for row in db.execute('SELECT DISTINCT name,unit FROM metrics ORDER BY name,unit'):
+        observed.setdefault(row['name'], set()).add(row['unit'] or '')
+    for name, units in observed.items():
+        if name not in known:
+            entry = dict(name=name, title=name, unit=next(iter(sorted(units))),
+                kind='reported statistic', source='Campo numerico estratto dal log; consultare evento originale.',
+                meaning='Metrica non ancora documentata individualmente.', semantics=metric_semantics('unknown'), orientation=metric_orientation('unknown'),
+                limits='Semantica non confermata: nessuna diagnosi automatica.',
+                unit_note='Unità conservate nei campioni; raw indica unità non confermata. Consultare l’evento originale.')
+            result.append(describe_units(entry, units))
+        else:
+            entry = known[name]
+            describe_units(entry, set(entry['units']) | units)
+    return result

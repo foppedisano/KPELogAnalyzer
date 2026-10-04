@@ -480,6 +480,10 @@ def store_interval(db, group, positions, interval):
 
 def calculate(db, ids, perspective_id=None):
     from .mos import score, MODEL, NAME
+    # Legacy-only archives must not scan all metrics to discover an empty join,
+    # especially when the call register requests hundreds of summaries.
+    if not db.execute('SELECT 1 FROM telemetry_intervals LIMIT 1').fetchone():
+        return []
     marks = ','.join('?' for _ in ids)
     data = rows(db, f'''SELECT m.*,t.start window_start,t.end window_end,t.role,t.record_id,t.previous_record_id,t.refs,
         p.start,p.end,p.connected,i.label,i.clock_offset,f.name filename,e.line_no

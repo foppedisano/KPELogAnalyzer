@@ -1,7 +1,22 @@
 "use strict";
 
+const metricUnitLabels = new Map();
+function registerMetricUnits(entries) {
+  for (const entry of entries) for (const [unit, label] of Object.entries(entry.unit_labels || {})) metricUnitLabels.set(unit, label);
+}
+function metricUnitLabel(unit) {
+  return metricUnitLabels.get(unit) || (unit === 'raw' ? 'raw · unità non confermata' : unit ? `${unit} · unità non documentata` : 'unità non dichiarata');
+}
+function chartSeriesKey(p) {
+  return JSON.stringify([p.name,p.unit,p.statistic,p.call_id,p.perspective_id,p.direction,p.flow,p.ssrc,p.device,p.sample_kind,p.observer,p.output_device,p.input_device,p.lifecycle]);
+}
+function chartUnitKey(p) {
+  return p.unit && p.unit !== 'raw' ? p.unit : `${p.unit || 'unknown'} · ${p.name}`;
+}
+
 // Nice bounds, with integral steps for discrete packet counts.
 function chartScale(values, unit) {
+  if (unit === 'PQ') return {low:0, high:100, ticks:[0,20,40,60,80,100]};
   if (unit === 'MOS' && values.every(v => v >= 1 && v <= 5)) return {low:1, high:5, ticks:[1,2,3,4,5]};
   let low = 0, high = unit === 'MOS' ? 5 : 0;
   for (const v of values) { low = Math.min(low, v); high = Math.max(high, v); }
@@ -19,6 +34,7 @@ function chartScale(values, unit) {
 async function mountMultiChart(root, ids, initialMetric) {
   const options = await api('metric-options?calls=' + ids.join(','));
   if (!root.isConnected) return;
+  registerMetricUnits(options);
   const selected = new Map(), cache = new Map(), hidden = new Set();
   let points = [], generation = 0, disposed = false, zoom = null, cursor = null, bounds = null;
   const defaults = name => {
@@ -29,22 +45,27 @@ async function mountMultiChart(root, ids, initialMetric) {
   root.innerHTML = `<div class="panel"><div class="panel-head"><h2>Andamento delle metriche</h2></div><div class="panel-body">
     <details class="chart-picker"><summary>Aggiungi metriche</summary><label>Cerca una metrica<input type="search" class="metric-search" placeholder="MOS, jitter, pacchetti…"></label><div class="metric-choices"></div></details>
     <div class="toolbar chart-presets">Selezioni rapide: <button data-preset="quality">Qualità</button><button data-preset="network">Rete</button><button data-preset="receive">Ricezione</button><button data-preset="clear">Rimuovi tutte</button></div>
-    <div class="selected-metrics"></div><div class="chart-controls"><label>Allineamento<select class="chart-axis"><option value="relative">Tempo dalla prima evidenza</option><option value="absolute">Orario log + correzione</option></select></label><label class="check"><input type="checkbox" class="chart-invalid"> Mostra anomali</label><button class="zoom-out" aria-label="Riduci zoom temporale">−</button><button class="zoom-in" aria-label="Aumenta zoom temporale">+</button><button class="reset-zoom">Mostra tutta la chiamata</button></div>
+    <div class="selected-metrics"></div><div class="chart-controls"><label>Allineamento<select class="chart-axis"><option value="relative">Tempo dalla prima evidenza</option><option value="absolute">Orario log + correzione</option></select></label><label class="check"><input type="checkbox" class="chart-invalid"> Mostra anomali</label><button class="zoom-out" aria-label="Riduci zoom temporale">−</button><button class="zoom-in" aria-label="Aumenta zoom temporale">+</button><button class="reset-zoom" title="Ripristina tutto l'intervallo temporale">Reset zoom</button></div>
     <label class="check"><input type="checkbox" class="chart-duplicates"> Mostra copie storiche della stessa sorgente</label>
     <p class="muted">Di norma ogni sorgente compare una volta per chiamata; flussi e SSRC distinti restano separati. Una scala per unità; le metriche raw restano separate. La rotella scorre la pagina. Ctrl + rotella ingrandisce intorno al puntatore; i pulsanti − e + agiscono al centro. Lo zoom è comune a tutti i pannelli. Clic sulla legenda per nascondere una curva. RTT = andata e ritorno, non ritardo audio.</p>
     <p class="chart-status" role="status"></p><p class="chart-notes muted"></p><div class="multi-panels"></div><div class="multi-readout" aria-live="off">Passa sul grafico per leggere i campioni e le evidenze.</div><div class="metric-statistics"></div><div class="metric-episodes"></div>
     </div></div>`;
   const titleFor = value => options.find(o => o.value === value)?.title || value;
+  const unitsFor = value => {
+    const [name, direction] = value.split('|');
+    const observed = [...new Set(points.filter(p => p.name === name && (!direction || p.direction === direction)).map(p => p.unit))];
+    return observed.length ? observed.map(metricUnitLabel).join(' / ') : options.find(o => o.value === value)?.unit_label || 'unità non dichiarata';
+  };
   function controls() {
     const query = $('.metric-search', root).value.toLocaleLowerCase();
-    $('.metric-choices', root).innerHTML = [...new Set(options.map(o => o.group))].map(group => `<fieldset><legend>${esc(group)}</legend>${options.filter(o => o.group === group && (o.title + o.name).toLocaleLowerCase().includes(query)).map(o => `<label><input type="checkbox" value="${esc(o.value)}" ${selected.has(o.value) ? 'checked' : ''}>${esc(o.title)} <small>${esc(o.name)}</small></label>`).join('')}</fieldset>`).join('');
+    $('.metric-choices', root).innerHTML = [...new Set(options.map(o => o.group))].map(group => `<fieldset><legend>${esc(group)}</legend>${options.filter(o => o.group === group && (o.title + o.name + o.unit_label).toLocaleLowerCase().includes(query)).map(o => `<label title="${esc(o.unit_note)}"><input type="checkbox" value="${esc(o.value)}" ${selected.has(o.value) ? 'checked' : ''}>${esc(o.title)} <small>${esc(o.name)} · ${esc(o.unit_label)}</small></label>`).join('')}</fieldset>`).join('');
     $$('.metric-choices input', root).forEach(el => el.onchange = safe(async () => {
       if (el.checked) selected.set(el.value, defaults(el.value.split('|')[0]).value); else selected.delete(el.value);
       controls(); await load();
     }));
     $('.selected-metrics', root).innerHTML = [...selected].map(([value, stat], i) => {
       const stats = defaults(value.split('|')[0]).stats;
-      return `<div class="metric-chip"><strong>${esc(titleFor(value))}</strong>${stats.length > 1 ? `<select data-stat="${i}" aria-label="Statistica ${esc(titleFor(value))}">${stats.map(s => `<option ${s === stat ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : ''}<a class="small-button" href="/api/metrics?${esc(params(value, stat).toString())}&amp;format=csv">CSV</a><button data-remove="${i}" aria-label="Rimuovi ${esc(titleFor(value))}">×</button></div>`;
+      return `<div class="metric-chip"><strong>${esc(titleFor(value))}</strong><span class="metric-unit" title="${esc(options.find(o => o.value === value)?.unit_note || '')}">${esc(unitsFor(value))}</span>${stats.length > 1 ? `<select data-stat="${i}" aria-label="Statistica ${esc(titleFor(value))}">${stats.map(s => `<option ${s === stat ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : ''}<a class="small-button" href="/api/metrics?${esc(params(value, stat).toString())}&amp;format=csv">CSV</a><button data-remove="${i}" aria-label="Rimuovi ${esc(titleFor(value))}">×</button></div>`;
     }).join('');
     $$('[data-remove]', root).forEach(b => b.onclick = safe(async () => {selected.delete([...selected.keys()][+b.dataset.remove]); controls(); await load();}));
     $$('[data-stat]', root).forEach(el => el.onchange = safe(async () => {selected.set([...selected.keys()][+el.dataset.stat], el.value); controls(); await load();}));
@@ -53,8 +74,8 @@ async function mountMultiChart(root, ids, initialMetric) {
     const [name, direction = ''] = value.split('|');
     return new URLSearchParams({calls: ids.join(','), name, direction, statistic: stat, invalid: $('.chart-invalid', root).checked ? '1' : '0', duplicates: $('.chart-duplicates', root).checked ? '1' : '0'});
   }
-  const seriesKey = p => JSON.stringify([p.name,p.statistic,p.call_id,p.perspective_id,p.direction,p.flow,p.ssrc,p.device,p.sample_kind,p.observer,p.output_device,p.input_device,p.lifecycle]);
-  const seriesLabel = p => `${p.name} · ${p.statistic || ''} · #${p.call_id} · P${p.perspective_id} · ${p.label} · ${p.measurement_context?.label || p.direction || ''}${p.flow ? ' · flusso '+p.flow : ''}${p.ssrc ? ' · SSRC '+p.ssrc : ''}${p.device ? ' · '+p.device : ''}${p.observer ? ' · '+p.observer : ''}${p.output_device ? ' · output '+p.output_device : ''}${p.input_device ? ' · input '+p.input_device : ''}${p.lifecycle ? ' · ciclo '+p.lifecycle : ''}`;
+  const seriesKey = chartSeriesKey;
+  const seriesLabel = p => `${p.name} [${metricUnitLabel(p.unit)}] · ${p.observation_label || p.sample_kind || p.statistic || ''} · #${p.call_id} · P${p.perspective_id} · ${p.label} · ${p.measurement_context?.label || p.direction || ''}${p.flow ? ' · flusso '+p.flow : ''}${p.ssrc ? ' · SSRC '+p.ssrc : ''}${p.device ? ' · '+p.device : ''}${p.observer ? ' · '+p.observer : ''}${p.output_device ? ' · output '+p.output_device : ''}${p.input_device ? ' · input '+p.input_device : ''}${p.lifecycle ? ' · ciclo '+p.lifecycle : ''}`;
   const xvalue = p => $('.chart-axis', root).value === 'absolute' ? timeValue(p.ts) + (p.clock_offset || 0) * 1000 : timeValue(p.ts) - timeValue(p.start);
   const end = p => p.valid_until ? xvalue(p) + timeValue(p.valid_until) - timeValue(p.ts) : xvalue(p);
   let series = [], panels = [];
@@ -63,9 +84,9 @@ async function mountMultiChart(root, ids, initialMetric) {
     for (const p of points) {const key = seriesKey(p); if (!grouped.has(key)) grouped.set(key, []); grouped.get(key).push(p);}
     series = [...grouped].map(([key, ps], i) => ({key, ps: ps.sort((a,b) => timeValue(a.ts)-timeValue(b.ts)), color: colors[i % colors.length], index:i}));
     const units = new Map();
-    for (const s of series) {const p = s.ps[0], key = p.unit === 'raw' ? 'raw · '+p.name : p.unit || 'unità non nota · '+p.name; if (!units.has(key)) units.set(key, []); units.get(key).push(s);}
-    panels = [...units].map(([title, ss]) => ({title, ss}));
-    $('.multi-panels', root).innerHTML = panels.map((panel,i) => `<section class="multi-panel"><h3>${esc(panel.title)}</h3><div class="legend">${panel.ss.map(s => `<button data-series="${s.index}" aria-pressed="${!hidden.has(s.key)}" class="${hidden.has(s.key) ? 'disabled' : ''}"><span class="series-dot">●</span>${esc(seriesLabel(s.ps[0]))}</button>`).join('')}</div><div class="chart-area"><canvas data-panel="${i}" role="img" aria-label="Grafico temporale ${esc(panel.title)}"></canvas></div></section>`).join('');
+    for (const s of series) {const key = chartUnitKey(s.ps[0]); if (!units.has(key)) units.set(key, []); units.get(key).push(s);}
+    panels = [...units].map(([key, ss]) => ({title: metricUnitLabel(ss[0].ps[0].unit) + (!ss[0].ps[0].unit || ss[0].ps[0].unit === 'raw' ? ' · '+ss[0].ps[0].name : ''), ss}));
+    $('.multi-panels', root).innerHTML = panels.map((panel,i) => `<section class="multi-panel"><h3>Unità: ${esc(panel.title)}</h3><div class="legend">${panel.ss.map(s => `<button data-series="${s.index}" aria-pressed="${!hidden.has(s.key)}" class="${hidden.has(s.key) ? 'disabled' : ''}"><span class="series-dot">●</span>${esc(seriesLabel(s.ps[0]))}</button>`).join('')}</div><div class="chart-area"><canvas data-panel="${i}" role="img" aria-label="Grafico temporale; asse verticale: ${esc(panel.title)}"></canvas></div></section>`).join('');
     $$('[data-series]', root).forEach(b => {
       const s = series[+b.dataset.series];
       const svg = document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('width','12'); svg.setAttribute('height','12');
@@ -73,8 +94,9 @@ async function mountMultiChart(root, ids, initialMetric) {
       b.onclick = () => {hidden.has(s.key) ? hidden.delete(s.key) : hidden.add(s.key); b.classList.toggle('disabled',hidden.has(s.key)); b.setAttribute('aria-pressed',!hidden.has(s.key)); draw(); readout(); statistics();};
     });
     $$('canvas',root).forEach(canvas => {
-      canvas.onwheel = e => {if (!e.ctrlKey || !bounds) return; e.preventDefault(); if (e.deltaY) changeZoom(e.deltaY > 0 ? 1.4 : .7, Math.max(0, Math.min(1, (e.offsetX-65)/(canvas.clientWidth-85))));};
-      canvas.onmousemove = e => {if (!bounds) return; cursor = bounds[0]+Math.max(0,Math.min(1,(e.offsetX-65)/(canvas.clientWidth-85)))*(bounds[1]-bounds[0]); draw(); readout();};
+      const fraction = e => Math.max(0, Math.min(1, (e.offsetX-Number(canvas.dataset.plotLeft))/(Number(canvas.dataset.plotRight)-Number(canvas.dataset.plotLeft))));
+      canvas.onwheel = e => {if (!e.ctrlKey || !bounds) return; e.preventDefault(); if (e.deltaY) changeZoom(e.deltaY > 0 ? 1.4 : .7, fraction(e));};
+      canvas.onmousemove = e => {if (!bounds) return; cursor = bounds[0]+fraction(e)*(bounds[1]-bounds[0]); draw(); readout();};
       canvas.onmouseleave = () => {cursor = null; draw();};
     });
     statistics(); draw();
@@ -102,11 +124,15 @@ async function mountMultiChart(root, ids, initialMetric) {
     panels.forEach((panel,i) => {
       const canvas = $(`[data-panel="${i}"]`,root), w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
       canvas.width=w*dpr; canvas.height=h*dpr; const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
-      const left=65,right=w-20,top=15,bottom=h-35, sx=x=>left+(x-bounds[0])/(bounds[1]-bounds[0])*(right-left);
       const visible=panel.ss.filter(s=>!hidden.has(s.key));
       const scale=chartScale(visible.flatMap(s=>s.ps.filter(p=>end(p)>=bounds[0]&&xvalue(p)<=bounds[1]).map(p=>p.value)),panel.ss[0].ps[0].unit);
+      ctx.font='11px Segoe UI';
+      const tickLabel = v => v.toLocaleString('it-IT',{maximumSignificantDigits:10});
+      const left=Math.max(85,34+Math.max(...scale.ticks.map(v=>ctx.measureText(tickLabel(v)).width))),right=w-20,top=15,bottom=h-35, sx=x=>left+(x-bounds[0])/(bounds[1]-bounds[0])*(right-left);
+      canvas.dataset.plotLeft=left;canvas.dataset.plotRight=right;
       const sy=y=>bottom-(y-scale.low)/(scale.high-scale.low)*(bottom-top);
       ctx.font='11px Segoe UI'; ctx.fillStyle='#526474';
+      ctx.save();ctx.translate(13,(top+bottom)/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillText(metricUnitLabel(panel.ss[0].ps[0].unit),0,0);ctx.restore();
       for(const tick of scale.ticks) {const y=sy(tick); ctx.strokeStyle='#e3e9ed'; ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();ctx.textAlign='right';ctx.fillText(tick.toLocaleString('it-IT',{maximumSignificantDigits:10}),left-8,y+4);}
       for(let j=0;j<=4;j++){const t=bounds[0]+j*(bounds[1]-bounds[0])/4;ctx.textAlign='center';ctx.fillText($('.chart-axis',root).value==='absolute'?new Date(t).toISOString().slice(11,23):number(t/1000)+' s',sx(t),h-10);}
       ctx.save();ctx.beginPath();ctx.rect(left,top,right-left,bottom-top);ctx.clip();
@@ -126,7 +152,7 @@ async function mountMultiChart(root, ids, initialMetric) {
     $('.multi-readout',root).innerHTML=`<strong>${$('.chart-axis',root).value==='absolute'?esc(new Date(cursor).toISOString().replace('T',' ')):esc(number(cursor/1000))+' s dalla prima evidenza'}</strong>`+series.filter(s=>!hidden.has(s.key)).map(s=>{
       const p=s.ps.find(p=>p.valid_until&&xvalue(p)<=cursor&&end(p)>cursor)||s.ps.reduce((best,p)=>!best||Math.abs(xvalue(p)-cursor)<Math.abs(xvalue(best)-cursor)?p:best,null);
       const present=p&&(p.valid_until?xvalue(p)<=cursor&&end(p)>cursor:Math.abs(xvalue(p)-cursor)<=2500);
-      return `<p><strong>${esc(seriesLabel(s.ps[0]))}</strong>: ${present?`${esc(number(p.value))} ${esc(p.unit)}${p.valid?'':' · ANOMALO'} · ${esc(stamp(p.ts))}<br>${esc(p.filename)}:${esc(p.line_no)}${p.valid_until?' · valido fino a '+esc(p.valid_until):''}${p.evidence?'<br>'+p.evidence.map(e=>`evento ${esc(e.event_id)} · ${esc(e.filename)}:${esc(e.line)}`).join(' · '):''}`:'nessun campione (tolleranza ±2,5 s per i punti; intervallo effettivo per MOS)'}</p>`;
+      return `<p><strong>${esc(seriesLabel(s.ps[0]))}</strong>: ${present?`${esc(number(p.value))} ${esc(metricUnitLabel(p.unit))}${p.valid?'':' · ANOMALO'} · ${esc(stamp(p.ts))}<br>${esc(p.filename)}:${esc(p.line_no)}${p.interval_seconds?' · intervallo '+esc(number(p.interval_seconds))+' s':''}${p.valid_until?' · valido fino a '+esc(p.valid_until):''}${p.evidence?'<br>'+p.evidence.map(e=>`evento ${esc(e.event_id)} · ${esc(e.filename)}:${esc(e.line)}`).join(' · '):''}`:'nessun campione (tolleranza ±2,5 s per i punti; intervallo effettivo per MOS)'}</p>`;
     }).join('');
   }
   async function load(){
@@ -143,7 +169,7 @@ async function mountMultiChart(root, ids, initialMetric) {
     $('.multi-readout',root).textContent='Passa sul grafico: valori allo stesso istante, senza interpolare i dati mancanti.';
     const episodes=points.filter(p=>p.episode).map(p=>({...p.episode,side:`P${p.perspective_id} · ${p.label}`}));
     $('.metric-episodes',root).innerHTML=episodes.length?incidentTable({incidents:episodes,incident_warnings:[]}):'';
-    layout();
+    controls();layout();
   }
   $('.metric-search',root).oninput=controls;
   $('.chart-invalid',root).onchange=safe(async()=>{controls();await load();});
@@ -152,7 +178,7 @@ async function mountMultiChart(root, ids, initialMetric) {
   $('.zoom-in',root).onclick=()=>changeZoom(.7);
   $('.zoom-out',root).onclick=()=>changeZoom(1.4);
   $('.reset-zoom',root).onclick=()=>{zoom=null;cursor=null;draw();};
-  const presets={quality:['derived.mos_reference|incoming','derived.mos_reference|outgoing'],network:['rtcp.rtt','rtcp.jitter|incoming','rtcp.loss|incoming'],receive:['derived.mos_reference|incoming','vd.silence_skipped','vd.missing_packets'],clear:[]};
+  const presets={quality:['derived.perceptual_quality','derived.mos_reference|incoming','derived.mos_reference|outgoing'],network:['rtcp.rtt','rtcp.jitter|incoming','rtcp.loss|incoming'],receive:['derived.mos_reference|incoming','vd.silence_skipped','vd.missing_packets'],clear:[]};
   $$('[data-preset]',root).forEach(b=>b.onclick=safe(async()=>{selected.clear();for(const value of presets[b.dataset.preset])if(options.some(o=>o.value===value))selected.set(value,defaults(value.split('|')[0]).value);controls();await load();}));
   const observer=new ResizeObserver(draw);observer.observe($('.multi-panels',root));
   chartCleanup=()=>{disposed=true;generation++;observer.disconnect();};

@@ -137,6 +137,7 @@ VIEWS['a_counter_incident_matches'] = ('Evidence comparison only: silence-played
  AND i.kind='buffer_underrun' AND i.placed_start<c.ts AND i.placed_end>c.interval_start
  WHERE c.name='vd.silence_played'
  ''')
+VIEWS['a_transient_counter_intervals'] = ('Silence-played and underrun counter intervals used by transients. Request transients to materialize once across full lifecycle before scope filtering. Other counters remain in a_counter_intervals.', "SELECT * FROM a_counter_intervals WHERE name IN ('vd.silence_played','vd.underruns')")
 DERIVED = {
  'a_mos': ('One valid MOS interval clipped to the requested period; ID is request-local.', '''
  id INTEGER,series_key TEXT,call_id INTEGER,perspective_id INTEGER,import_id INTEGER,
@@ -157,8 +158,19 @@ DERIVED = {
 
 from .analytics_incidents import TABLES as INCIDENT_TABLES
 DERIVED.update(INCIDENT_TABLES)
+from .analytics_transients import TABLES as TRANSIENT_TABLES
+DERIVED.update(TRANSIENT_TABLES)
 
 EXAMPLES = [
+ dict(title='Silenzio e transitori per piattaforma (coincidenza, non causa)',datasets=['transients'],parameters={'metric':'vd.silence_played','observer':'NAWT%'},sql='''SELECT platform,type,
+ SUM(positive_intervals_with_transient) silence_intervals_with_transient,
+ SUM(intervals_with_transient) all_intervals_with_transient,
+ SUM(positive_intervals_without_any_transient) silence_intervals_without_any_transient,
+ SUM(total_intervals) total_evaluable_intervals
+ FROM a_counter_transient_summary WHERE name=:metric AND observer LIKE :observer
+ GROUP BY platform,type ORDER BY platform,type'''),
+ dict(title='Episodi per chiamata, archivio completo',datasets=['incident_summary'],parameters={},sql='SELECT * FROM a_incident_call_summary ORDER BY call_id,perspective_id,observer,device'),
+ dict(title='Silenzio già presente alla prima lettura, separato dai delta',datasets=['transients'],parameters={'metric':'vd.silence_played'},sql='SELECT * FROM a_counter_initial_observations WHERE name=:metric ORDER BY call_id,metric_id'),
  dict(title='Incrementi del silenzio per lettore/input',datasets=[],parameters={'metric':'vd.silence_played'},sql='SELECT observer,output_device,input_device,lifecycle,interval_start,ts,status,delta,unit,previous_event_id,event_id FROM a_counter_intervals WHERE name=:metric ORDER BY ts,id'),
  dict(title='Stati periodici e prove',datasets=[],parameters={},sql='SELECT ts,observer,output_device,input_device,name,value_json,event_id,filename,source_line FROM a_periodic_metadata ORDER BY ts,id'),
  dict(title='Chiamate con almeno X episodi MOS scarso', datasets=['mos'], parameters={'episodes':3},
@@ -182,7 +194,7 @@ EXAMPLES = [
 
 def validate(raw):
     if not isinstance(raw,dict): raise ValueError('Oggetto analisi richiesto')
-    unknown=set(raw)-{'sql','parameters','datasets','scope','threshold','min_episode_seconds','limit','semantic_version','incident_window_seconds','incident_time_basis'}
+    unknown=set(raw)-{'sql','parameters','datasets','scope','threshold','min_episode_seconds','limit','semantic_version','incident_window_seconds','incident_time_basis','transient_tolerance_seconds'}
     if unknown: raise ValueError('Campi analisi sconosciuti: '+', '.join(sorted(unknown)))
     if raw.get('semantic_version',VERSION) not in ('analytics-1',VERSION): raise ValueError('Versione semantica non supportata: rivedere la ricetta')
     sql=raw.get('sql','')
@@ -195,7 +207,7 @@ def validate(raw):
             raise ValueError('Parametri scalari finiti richiesti')
         if type(value)==int and not -(2**63)<=value<2**63: raise ValueError('Parametro intero fuori intervallo SQLite')
     datasets=raw.get('datasets',[])
-    if not isinstance(datasets,list) or any(x not in ('mos','incidents') for x in datasets): raise ValueError('Dataset derivati supportati: mos, incidents')
+    if not isinstance(datasets,list) or any(x not in ('mos','incidents','incident_summary','transients') for x in datasets): raise ValueError('Dataset derivati supportati: mos, incidents, incident_summary, transients')
     scope=raw.get('scope',{})
     if not isinstance(scope,dict) or set(scope)-{'call_ids','start','end','include_duplicates'}: raise ValueError('Scope non valido')
     scope=dict(scope)
@@ -220,12 +232,15 @@ def validate(raw):
     window=raw.get('incident_window_seconds',1)
     if type(window) not in (int,float) or not math.isfinite(window) or not .001<=window<=3600: raise ValueError('Finestra episodi da 0.001 a 3600 secondi')
     placement=raw.get('incident_time_basis','reported_end')
+    tolerance=raw.get('transient_tolerance_seconds',0)
+    if type(tolerance) not in (int,float) or not math.isfinite(tolerance) or not 0<=tolerance<=30:
+        raise ValueError('Tolleranza transitori da 0 a 30 secondi')
     if placement not in ('reported_end','log_span'):raise ValueError('incident_time_basis: reported_end oppure log_span')
     limit=raw.get('limit',200)
     if type(limit)!=int or not 1<=limit<=MAX_ROWS: raise ValueError('Limite da 1 a 1000 righe')
     return dict(sql=sql,parameters=params,datasets=sorted(set(datasets)),scope=scope,
                 threshold=threshold,min_episode_seconds=minimum,limit=limit,semantic_version=VERSION,
-                incident_window_seconds=window,incident_time_basis=placement)
+                incident_window_seconds=window,incident_time_basis=placement,transient_tolerance_seconds=tolerance)
 
 
 def prepare(db,c):
@@ -255,10 +270,24 @@ def prepare(db,c):
         db.execute('CREATE TEMP VIEW '+name+' AS SELECT * FROM '+hidden)
 
     for name,(_,ddl) in DERIVED.items(): db.execute('CREATE TEMP TABLE '+name+'('+ddl+')')
+    if 'transients' in c['datasets']:
+        # Compute complete lifecycle history once, before filtering end samples.
+        # A scope boundary must never turn a later observation into initial.
+        db.execute('UPDATE a_settings SET start=NULL,end=NULL')
+        db.execute('CREATE TEMP TABLE counter_materialized AS SELECT * FROM a_transient_counter_intervals')
+        db.execute('UPDATE a_settings SET start=?,end=?',(scope['start'],scope['end']))
+        db.execute('DROP VIEW a_transient_counter_intervals')
+        db.execute('CREATE TEMP TABLE a_transient_counter_intervals AS SELECT * FROM counter_materialized')
+        db.execute('DROP TABLE counter_materialized')
+        if scope['start']: db.execute('DELETE FROM a_transient_counter_intervals WHERE ts<?',(scope['start'],))
+        if scope['end']: db.execute('DELETE FROM a_transient_counter_intervals WHERE ts>=?',(scope['end'],))
+        db.execute('CREATE INDEX transient_counter_interval_id ON a_transient_counter_intervals(id)')
+        from .analytics_transients import populate as populate_transients
+        populate_transients(db,c)
     if 'mos' in c['datasets']:
         from .analytics_mos import populate
         populate(db,[r[0] for r in db.execute('SELECT call_id FROM a_scope ORDER BY call_id')],c)
-    if 'incidents' in c['datasets']:
+    if 'incidents' in c['datasets'] or 'incident_summary' in c['datasets']:
         from .analytics_incidents import populate as populate_incidents
         populate_incidents(db,c)
     return count,private
@@ -315,7 +344,9 @@ def query(db,raw):
                       mos_intervals=db.execute('SELECT COUNT(*) FROM a_mos').fetchone()[0],
                       calls_with_mos=db.execute('SELECT COUNT(DISTINCT call_id) FROM a_mos').fetchone()[0],
                       incident_episodes=db.execute('SELECT COUNT(*) FROM a_incidents').fetchone()[0],
-                      incident_windows=db.execute('SELECT COUNT(*) FROM a_incident_windows').fetchone()[0])
+                      incident_windows=db.execute('SELECT COUNT(*) FROM a_incident_windows').fetchone()[0],
+                      transients=db.execute('SELECT COUNT(*) FROM a_transients').fetchone()[0],
+                      unassigned_transients=db.execute('SELECT COUNT(*) FROM a_transients WHERE perspective_id IS NULL').fetchone()[0])
         prepared=time.monotonic()
         db.set_progress_handler(lambda:int(time.monotonic()-prepared>3),1000)
         db.set_authorizer(authorizer(private))
@@ -331,6 +362,7 @@ def query(db,raw):
             if len(result)>c['limit']:break
         warnings=['Risultati limitati ai dati osservati; leggere copertura e regole del catalogo.']
         if 'incidents' in c['datasets']: warnings.append('Underrun: durata e collocazione temporale sono distinte. Finestre a zero = nessun episodio chiuso ricostruito; NULL = episodio non risolto. Leggere a_incident_coverage e le evidenze.')
+        if 'transients' in c['datasets']: warnings.append('Transitori: sola coincidenza temporale. Nessun transitorio riconosciuto non significa nessuna causa. Prime letture separate dai delta; denominatori per serie, tipi sovrapponibili. Consultare a_transient_coverage.')
         if 'mos' not in c['datasets']: warnings.append('Dataset MOS non richiesto: le tabelle a_mos* sono vuote.')
         if c['scope']['include_duplicates']: warnings.append('Copie storiche incluse: rischio di conteggi ripetuti.')
         return dict(columns=columns,rows=result[:c['limit']],truncated=len(result)>c['limit'],coverage=coverage,
@@ -348,7 +380,7 @@ def catalog(db):
         db.execute('BEGIN');prepare(db,c)
         tables={}
         for name,(meaning,_) in {**VIEWS,**DERIVED}.items():
-            tables[name]=dict(description=meaning,dataset='incidents' if name in INCIDENT_TABLES or name=='a_counter_incident_matches' else 'mos' if name in DERIVED else 'base',
+            tables[name]=dict(description=meaning,dataset='transients' if name in TRANSIENT_TABLES or name=='a_transient_counter_intervals' else 'incident_summary' if name=='a_incident_call_summary' else 'incidents' if name in INCIDENT_TABLES or name=='a_counter_incident_matches' else 'mos' if name in DERIVED else 'base',
                              columns=[dict(name=r[1],type=r[2]) for r in db.execute('PRAGMA table_info('+name+')')])
         from .catalog import CATALOG, PERIODIC_METADATA
         return dict(version=VERSION,media_plane=MEDIA_PLANE,geo_temporal=geo_temporal_contract(),tables=tables,rules=RULES+MEDIA_PLANE['rules'],metrics=CATALOG,periodic_metadata=PERIODIC_METADATA,model=MODEL,examples=EXAMPLES,
@@ -358,7 +390,8 @@ def catalog(db):
 
 
 def coverage(db):
-    return dict(periodic=rows(db,"SELECT name,observer,unit,valid,COUNT(*) samples,SUM(perspective_id IS NULL) unassigned FROM metrics WHERE id IN (SELECT metric_id FROM periodic_evidence) GROUP BY name,observer,unit,valid"),periodic_metadata=rows(db,'SELECT name,COUNT(*) observations,SUM(perspective_id IS NULL) unassigned FROM periodic_metadata GROUP BY name'),version=VERSION,calls=db.execute('SELECT COUNT(*) FROM calls').fetchone()[0],
+    from .transients import TYPES
+    return dict(transient_contract=dict(types=list(TYPES),dataset='transients',coverage_view='a_transient_coverage',interval_view='a_transient_counter_intervals',initial_view='a_counter_initial_observations',tolerance_seconds=[0,30],unsupported=['audio_focus','audio_session_interruption']),periodic=rows(db,"SELECT name,observer,unit,valid,COUNT(*) samples,SUM(perspective_id IS NULL) unassigned FROM metrics WHERE id IN (SELECT metric_id FROM periodic_evidence) GROUP BY name,observer,unit,valid"),periodic_metadata=rows(db,'SELECT name,COUNT(*) observations,SUM(perspective_id IS NULL) unassigned FROM periodic_metadata GROUP BY name'),version=VERSION,calls=db.execute('SELECT COUNT(*) FROM calls').fetchone()[0],
         recognized_duplicates=db.execute('SELECT COUNT(*) FROM effective_duplicates').fetchone()[0],
         producer_status=rows(db,'SELECT status,COUNT(*) import_count FROM import_producers GROUP BY status'),
         networks=rows(db,'SELECT access,COUNT(*) observations,COUNT(wifi_identity) with_wifi_identity,COUNT(operator) with_operator FROM network_observations GROUP BY access'),

@@ -76,6 +76,8 @@ def extract(text, ts):
 
 
 def enrich(db, iid):
+    from .ios_positions import enrich as enrich_ios_positions
+    enrich_ios_positions(db,iid)
     marker=f'{VERSION}:{iid}'
     if db.execute('SELECT 1 FROM meta WHERE key=?',(marker,)).fetchone():return
     for e in db.execute("SELECT * FROM events WHERE import_id=? AND kind NOT LIKE 'telemetry.%' AND (instr(text,'Location[')>0 OR instr(lower(text),'x-location:')>0)",(iid,)):
@@ -140,6 +142,10 @@ def grid(lat,lon,size):
 
 
 def aggregate(db, params):
+    if params.get('metric','mos') == 'perceptual':
+        from .perceptual_geo import aggregate as perceptual
+        return perceptual(db, params)
+    if params.get('metric','mos') != 'mos': raise ValueError('Metrica geografica non valida')
     from .mobility import Context, expand, filters, matches, summary, FIELDS
     selected_filters=filters(params)
     size=int(params.get('cell','250'));direction=params.get('direction','downstream');quality=params.get('quality','fresh')

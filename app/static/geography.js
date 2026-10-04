@@ -77,12 +77,14 @@ async function openGeoTemporal(page, cell, params, valid) {
     await load();
   }catch(e){if(live())el('status').textContent=e.message;}
 }
-async function renderGeography(page, renderId) {
-  page.innerHTML = title('OSSERVATORIO GEOGRAFICO','La qualità, sul territorio.','Esplora dove il trasporto voce funziona e dove peggiora. Cambia scala e periodo senza perdere lo storico.') + `
+async function renderGeography(page, renderId, callId=null) {
+  const callMode=callId!==null;
+  page.innerHTML = (callMode?'<h2>Percorso e qualità</h2><p>Posizioni della chiamata, separate per dispositivo / sorgente.</p>':title('OSSERVATORIO GEOGRAFICO','La qualità, sul territorio.','Esplora gli indicatori di qualità audio e la loro copertura geografica. Cambia scala e periodo senza perdere lo storico.')) + `
   <section class="geo-controls panel">
+    <label>Metrica<select id="geo-metric"><option value="perceptual">Perceptual Quality · AWT · 0–100</option><option value="mos">MOS · perdita RTCP · 1–5</option></select></label>
     <label>Direzione<select id="geo-direction"><option value="downstream">↓ Downstream · verso l’app</option><option value="upstream">↑ Upstream · report del peer</option></select></label>
     <label>Dimensione cella<select id="geo-cell"><option value="50">50 m</option><option value="100">100 m</option><option value="250" selected>250 m</option><option value="500">500 m</option><option value="1000">1 km</option><option value="5000">5 km</option><option value="10000">10 km</option></select></label>
-    <label>Posizioni<select id="geo-quality"><option value="fresh">Nuovi aggiornamenti locali</option><option value="declared">Includi dichiarazioni SIP locali</option></select></label>
+    <label>Posizioni<select id="geo-quality"><option value="fresh">Nuovi aggiornamenti locali</option><option value="declared" selected>Includi posizioni SIP e aggiornamenti iOS</option></select></label>
     <details class="geo-advanced"><summary>Rete, operatore e piattaforma</summary><div class="geo-date-controls">
     <label>Piattaforma<select id="geo-platform"><option value="all">Tutte</option><option value="android">Android</option><option value="ios">iOS</option><option value="desktop">Desktop</option><option value="unknown">Sconosciuta</option></select></label>
     <label>Accesso locale<select id="geo-access"><option value="all">Tutti</option><option value="cellular">Rete mobile</option><option value="wifi">Wi-Fi</option><option value="ethernet">Ethernet</option><option value="unknown">Sconosciuto</option></select></label>
@@ -97,16 +99,26 @@ async function renderGeography(page, renderId) {
   <div id="geo-stats" class="geo-stats"></div><p id="geo-context" class="geo-method"></p><p id="geo-status" role="status">Preparazione dell’archivio geografico…</p>
   <div class="geo-layout"><section class="geo-map panel"><canvas id="geo-canvas" tabindex="0" aria-label="Mappa qualità. Trascina per spostare; rotella o tasti più e meno per zoom; frecce per spostare."></canvas>
     <div class="geo-map-actions"><button id="geo-plus" aria-label="Ingrandisci mappa">+</button><button id="geo-minus" aria-label="Riduci mappa">−</button><button id="geo-fit">Inquadra dati</button><button id="geo-fullscreen" aria-label="Mappa a schermo intero">⛶</button></div>
-    <div class="geo-map-settings"><label><input id="geo-locations" type="checkbox" checked> Posizioni senza MOS</label><label><input id="geo-online" type="checkbox"> Strade online OSM</label><small>OSM riceve l’area visualizzata, mai log o MOS.</small></div>
+    <div class="geo-map-settings"><label><input id="geo-locations" type="checkbox" checked> Posizioni senza valore</label><label><input id="geo-online" type="checkbox"> Strade online OSM</label><small>OSM riceve solo l’area visualizzata, mai log o valori di qualità.</small></div>
     <div id="geo-popup" class="geo-popup" hidden><button id="geo-popup-close" aria-label="Chiudi dettaglio cella">×</button><div id="geo-popup-content"></div></div><div class="geo-legend"><span><i class="geo-red"></i> &lt;3</span><span><i class="geo-amber"></i> 3–4</span><span><i class="geo-green"></i> ≥4</span><span><i class="geo-grey"></i> Senza MOS</span><small>Tratteggio: &lt;60 s o un solo giorno</small></div>
     <div class="geo-map-footer"><span id="geo-scale"></span><span>Base offline: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a><span id="geo-osm-credit" hidden> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></span></span></div>
-  </section><aside class="geo-side"><section id="geo-detail" class="panel geo-detail"><span class="eyebrow">ESPLORA UNA ZONA</span><h2>Ogni colore ha una storia.</h2><p>Seleziona una cella per vedere MOS medio, durata osservata e copertura. Il grigio indica una posizione conosciuta senza una misura MOS associabile.</p></section><section class="panel geo-ranking"><h2>Zone da osservare</h2><p>Media MOS crescente nel periodo selezionato.</p><div id="geo-ranking"></div></section></aside></div>
-  <p class="geo-method">MOS a profilo fisso, sola perdita RTP/RTCP. Media pesata sui secondi osservati; nessuna interpolazione del percorso. Log legacy: posizioni mantenute al massimo 120 s dal messaggio. Telemetria strutturata: massimo 30 s dal fix, senza usare fix futuri o cached. Le coordinate SIP sono dichiarazioni, non nuovi fix. Celle indicative in metri; ingrandire una cella non migliora l’accuratezza della posizione. Nessun nome, ZIP o identificativo di chiamata sulla mappa.</p>`;
+  </section><aside class="geo-side"><section id="geo-detail" class="panel geo-detail"><span class="eyebrow">ESPLORA UNA ZONA</span><h2>Ogni colore ha una storia.</h2><p>Seleziona una cella per vedere qualità e copertura. Il grigio indica una posizione senza un valore associabile.</p></section><section class="panel geo-ranking"><h2>Zone da osservare</h2><p>Media MOS crescente nel periodo selezionato.</p><div id="geo-ranking"></div></section></aside></div>
+  <p id="geo-method-note" class="geo-method">MOS a profilo fisso, sola perdita RTP/RTCP. Media pesata sui secondi osservati; nessuna interpolazione del percorso. Log legacy: posizioni mantenute al massimo 120 s dal messaggio. Telemetria strutturata: massimo 30 s dal fix, senza usare fix futuri o cached. Le coordinate SIP sono dichiarazioni, non nuovi fix. Celle indicative in metri; ingrandire una cella non migliora l’accuratezza della posizione. Nessun nome, ZIP o identificativo di chiamata sulla mappa.</p>`;
+  if(callMode){
+    $('#geo-cell',page).value='50';
+    for(const selector of ['#geo-metric','#geo-direction','#geo-quality'])$(selector,page).closest('label').hidden=true;
+    $$('.geo-advanced,.geo-time',page).forEach(e=>e.hidden=true);
+    $('.geo-controls',page).insertAdjacentHTML('afterbegin','<label>Device / sorgente<select id="route-source" aria-label="Device del percorso"></select></label>');
+    $('.geo-controls',page).insertAdjacentHTML('beforeend','<label>Posizione registrata<select id="route-point" aria-label="Posizione del percorso"><option value="">Seleziona un punto…</option></select></label>');
+    $('.geo-ranking',page).hidden=true;
+  }
   const canvas=$('#geo-canvas',page),ctx=canvas.getContext('2d');
   let data=null, selected=null, dead=false, request=0, zoom=6, center=[.534,.37], width=900,height=620, hit=[], timer, frame, dragging=null, moved=false, appliedParams={};
   const tiles=new Map();let tileFailed=false;
   const valid=()=>!dead && renderId===renderToken && page.isConnected;
-  const color=v=>v<3?'#d84c48':v<4?'#d59a2a':'#159786';
+  const isPQ=()=>$('#geo-metric',page).value==='perceptual';
+  const metricLabel=()=>isPQ()?'Perceptual Quality':'MOS';
+  const color=v=>isPQ()?`hsl(${Math.max(0,Math.min(100,v))*1.3} 60% 40%)`:v<3?'#d84c48':v<4?'#d59a2a':'#159786';
   const project=([lon,lat])=>{lat=Math.max(-85.0511,Math.min(85.0511,lat));return [(lon+180)/360,(1-Math.log(Math.tan(Math.PI/4+lat*Math.PI/360))/Math.PI)/2];};
   const scale=()=>256*2**zoom;
   const screen=p=>[(p[0]-center[0])*scale()+width/2,(p[1]-center[1])*scale()+height/2];
@@ -139,12 +151,37 @@ async function renderGeography(page, renderId) {
       const keys=new Set(data.cells.map(c=>c.id));
       if($('#geo-locations',page).checked)for(const c of data.locations)if(!keys.has(c.id))drawCell(c,true);
       for(const c of data.cells)drawCell(c,false);
+      if(callMode)drawRoute();
     }
     const lat=Math.atan(Math.sinh(Math.PI*(1-2*center[1])))*180/Math.PI;
     const metresPerPixel=40075016.686*Math.cos(lat*Math.PI/180)/scale();
     const target=metresPerPixel*100,unit=10**Math.floor(Math.log10(target));const bar=Math.floor(target/unit)*unit;
     ctx.strokeStyle='#294954';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(20,height-44);ctx.lineTo(20+bar/metresPerPixel,height-44);ctx.stroke();
     $('#geo-scale',page).textContent=`${bar>=1000?number(bar/1000)+' km':number(bar)+' m'} · zoom ${number(zoom)}`;
+  }
+  function drawRoute(){
+    const fresh=data.points.filter(p=>p.segment!==null);
+    ctx.strokeStyle='#173f68';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+    for(let i=1;i<fresh.length;i++){
+      const a=fresh[i-1],b=fresh[i];if(a.segment!==b.segment)continue;
+      const [x,y]=screen(project([a.longitude,a.latitude])),[u,v]=screen(project([b.longitude,b.latitude]));
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(u,v);ctx.stroke();
+      if(Math.hypot(u-x,v-y)>35){const angle=Math.atan2(v-y,u-x),mx=(x+u)/2,my=(y+v)/2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(mx-8*Math.cos(angle-.5),my-8*Math.sin(angle-.5));ctx.lineTo(mx,my);ctx.lineTo(mx-8*Math.cos(angle+.5),my-8*Math.sin(angle+.5));ctx.stroke();ctx.setLineDash([5,4]);}
+    }
+    ctx.setLineDash([]);
+    for(const p of data.points){
+      const [x,y]=screen(project([p.longitude,p.latitude]));if(x<0||y<0||x>width||y>height)continue;
+      ctx.beginPath();ctx.arc(x,y,p.segment===null?4:5,0,2*Math.PI);
+      ctx.fillStyle=p.segment===null?'#fff':p.value===null?'#738b99':color(p.value);ctx.fill();ctx.strokeStyle='#173f68';ctx.lineWidth=1.5;ctx.stroke();
+      hit.push({point:p,x:x-7,y:y-7,w:14,h:14});
+    }
+    for(const [p,label] of [[fresh[0],'Inizio'],[fresh.at(-1),'Fine']])if(p){const [x,y]=screen(project([p.longitude,p.latitude]));ctx.font='bold 13px system-ui';ctx.fillStyle='#173f68';ctx.fillText(label,x+9,y+(label==='Inizio'?-10:20));}
+  }
+  function showPoint(p){
+    $('#route-point',page).value=String(p.id);
+    const e=p.evidence;
+    const html=`<h3>${esc(p.ts)}</h3><p><strong>${p.value===null?'Senza valore':number(p.value)+' / 100 · Perceptual Quality'}</strong></p><p>${p.reason?esc(p.reason):`${number(p.underrun_ms)} ms in underrun su ${number(p.observed_ms)} ms di chiamata nella finestra.`}</p><p>${p.kind==='cached'?'Coordinate dalla cache':p.kind==='sip_local'?'Coordinate dichiarate nel messaggio SIP; età reale ignota':p.kind==='sip_config'?'Aggiornamento locale degli header SIP; età del fix non verificata':'Aggiornamento locale'} · ${p.latitude.toFixed(6)}, ${p.longitude.toFixed(6)}</p><p>Posizione: ${esc(e.filename)}:${e.line} · evento #${e.event_id}</p>${p.audio_evidence.map(e=>`<p>Qualità: ${esc(e.filename)}:${esc(e.line)} · evento #${e.event_id}</p>`).join('')}`;
+    $('#geo-detail',page).innerHTML=html;$('#geo-popup-content',page).innerHTML=html;$('#geo-popup',page).hidden=false;redraw();
   }
   function drawCell(c,grey){
     const [w,s,e,n]=c.bounds,[x,y]=screen(project([w,n])),[right,bottom]=screen(project([e,s]));
@@ -173,24 +210,26 @@ async function renderGeography(page, renderId) {
   }
   function show(c,grey=false){
     selected=c;const [w,s,e,n]=c.bounds;
-    $('#geo-detail',page).innerHTML=grey?`<span class="eyebrow">POSIZIONE OSSERVATA</span><h2>Nessun MOS associabile</h2><p>Questa cella contiene coordinate nei log, ma nessun intervallo MOS valido con i criteri e il periodo selezionati.</p>`:
-      `<span class="eyebrow">${esc(data.direction)} · CELLA ${number(data.cell)} m</span><div class="geo-score" data-color="${color(c.mean)}">${number(c.mean)}<small>MOS medio</small></div><p>${c.limited?'◌ Copertura limitata: interpreta con cautela.':'● Osservazioni su più giorni.'}</p><dl><dt>Minimo / massimo</dt><dd>${number(c.minimum)} / ${number(c.maximum)}</dd><dt>Tempo osservato</dt><dd>${number(c.seconds)} s</dd><dt>Intervalli / giorni</dt><dd>${c.observations} / ${c.days}</dd><dt>Accuratezza dichiarata peggiore</dt><dd>${c.accuracy_max==null?'Non disponibile':number(c.accuracy_max)+' m'}</dd><dt>Prima / ultima osservazione</dt><dd>${esc(stamp(c.first))}<br>${esc(stamp(c.last))}</dd></dl>`;
+    $('#geo-detail',page).innerHTML=grey?`<span class="eyebrow">POSIZIONE OSSERVATA</span><h2>Nessun valore associabile</h2><p>Questa cella contiene coordinate nei log, ma nessun campione ${metricLabel()} valido con i criteri e il periodo selezionati.</p>`:
+      `<span class="eyebrow">${esc(data.direction)} · CELLA ${number(data.cell)} m</span><div class="geo-score" data-color="${color(c.mean)}">${number(c.mean)}<small>${metricLabel()} · media</small></div><p>${callMode?'Campioni della sola chiamata e sorgente selezionata.':c.limited?'◌ Copertura limitata: interpreta con cautela.':'● Osservazioni su più giorni.'}</p><dl><dt>Minimo / massimo</dt><dd>${number(c.minimum)} / ${number(c.maximum)}</dd><dt>Tempo osservato</dt><dd>${number(c.seconds)} s</dd><dt>Intervalli / giorni</dt><dd>${c.observations} / ${c.days}</dd><dt>Accuratezza dichiarata peggiore</dt><dd>${c.accuracy_max==null?'Non disponibile':number(c.accuracy_max)+' m'}</dd><dt>Prima / ultima osservazione</dt><dd>${esc(stamp(c.first))}<br>${esc(stamp(c.last))}</dd></dl>`;
     const scoreEl=$('.geo-score',page);if(scoreEl)scoreEl.style.color=scoreEl.dataset.color;
     $('#geo-detail',page).innerHTML+=`<p class="muted">Centro cella: ${((s+n)/2).toFixed(5)}, ${((w+e)/2).toFixed(5)}</p>`;
+    if(isPQ()&&!grey)$('#geo-detail',page).innerHTML+=`<p>${c.observations} finestre distinte campionate al timestamp delle posizioni. I collegamenti fra posizioni non localizzano altri campioni.</p><p>${c.speed_max_mps==null?'Velocità non disponibile.':`Velocità media massima fra fix: ${number(c.speed_max_mps*3.6)} km/h.`} ${c.movement_exceeds_cell?'Movimento stimato in un secondo superiore alla dimensione della cella: localizzazione indicativa.':''}</p>`;
+    if(callMode){const points=data.points.filter(p=>p.cell_id===c.id);$('#geo-detail',page).innerHTML+=`<p>${points.length} messaggi di posizione in questa cella. Usa “Posizione registrata” per consultarne orario ed evidenze.</p>`;if(grey)$('#geo-detail',page).innerHTML+=`<ul>${[...new Set(points.map(p=>p.reason).filter(Boolean))].map(r=>`<li>${esc(r)}</li>`).join('')}</ul>`;}
     $('#geo-popup-content',page).innerHTML=$('#geo-detail',page).innerHTML;
     const popupScore=$('#geo-popup .geo-score',page);if(popupScore)popupScore.style.color=popupScore.dataset.color;
-    $('#geo-popup',page).hidden=true;redraw();openGeoTemporal(page,c,{...appliedParams,cell:data.cell,direction:data.direction,quality:data.quality},valid);
+    $('#geo-popup',page).hidden=!isPQ();redraw();if(!isPQ())openGeoTemporal(page,c,{...appliedParams,cell:data.cell,direction:data.direction,quality:data.quality},valid);
   }
   function setZoom(value,anchor=[width/2,height/2]){const before=world(anchor);zoom=Math.max(2,Math.min(18,value));const after=world(anchor);center=[center[0]+before[0]-after[0],center[1]+before[1]-after[1]];redraw();}
   canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect();setZoom(zoom+(e.deltaY<0?.5:-.5),[e.clientX-r.left,e.clientY-r.top]);};
   canvas.onpointerdown=e=>{canvas.setPointerCapture(e.pointerId);dragging=[e.clientX,e.clientY,...center];moved=false;};
   canvas.onpointermove=e=>{if(!dragging)return;const dx=e.clientX-dragging[0],dy=e.clientY-dragging[1];if(Math.abs(dx)+Math.abs(dy)>4)moved=true;center=[dragging[2]-dx/scale(),Math.max(0,Math.min(1,dragging[3]-dy/scale()))];redraw();};
-  canvas.onpointerup=e=>{dragging=null;if(moved)return;const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const h=[...hit].reverse().find(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h);if(h)show(h.c,h.grey);};
+  canvas.onpointerup=e=>{dragging=null;if(moved)return;const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const h=[...hit].reverse().find(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h);if(h){if(h.point)showPoint(h.point);else show(h.c,h.grey);}};
   canvas.onpointercancel=()=>{dragging=null;};canvas.ondblclick=e=>{const r=canvas.getBoundingClientRect();setZoom(zoom+1,[e.clientX-r.left,e.clientY-r.top]);};
   canvas.onkeydown=e=>{if(['+','=','-','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();if(e.key==='+'||e.key==='=')setZoom(zoom+1);else if(e.key==='-')setZoom(zoom-1);else{center[e.key==='ArrowLeft'||e.key==='ArrowRight'?0:1]+=(e.key==='ArrowLeft'||e.key==='ArrowUp'?-80:80)/scale();redraw();}}};
   $('#geo-popup-close',page).onclick=()=>{$('#geo-popup',page).hidden=true;};
   $('#geo-plus',page).onclick=()=>setZoom(zoom+1);$('#geo-minus',page).onclick=()=>setZoom(zoom-1);
-  $('#geo-fit',page).onclick=()=>fit((data?.cells.length?data.cells:data?.locations||[]).map(c=>c.bounds),12);
+  $('#geo-fit',page).onclick=()=>fit((callMode?data?.locations||[]:data?.cells.length?data.cells:data?.locations||[]).map(c=>c.bounds),callMode?17:12);
   $('#geo-fullscreen',page).onclick=safe(async()=>{if(document.fullscreenElement)await document.exitFullscreen();else await $('.geo-map',page).requestFullscreen();});
   $('#geo-locations',page).onchange=redraw;
   $('#geo-online',page).onchange=()=>{$('#geo-osm-credit',page).hidden=!$('#geo-online',page).checked;redraw();};
@@ -207,20 +246,37 @@ async function renderGeography(page, renderId) {
   }
   async function load(first=false){
     const token=++request;$('#geo-status',page).textContent='Calcolo delle celle nel periodo selezionato…';
-    const query=new URLSearchParams({cell:$('#geo-cell',page).value,direction:$('#geo-direction',page).value,quality:$('#geo-quality',page).value});
+    const pq=isPQ();$('#geo-direction',page).disabled=pq;if(pq)$('#geo-direction',page).value='downstream';
+    const query=new URLSearchParams({metric:$('#geo-metric',page).value,cell:$('#geo-cell',page).value,direction:$('#geo-direction',page).value,quality:$('#geo-quality',page).value});
     for(const k of ['platform','access','upstream','operator'])query.set(k,$('#geo-'+k,page).value);
     for(const k of ['start','end'])if($('#geo-'+k,page).value)query.set(k,$('#geo-'+k,page).value);
+    if(callMode){query.set('call',callId);if($('#route-source',page).value)query.set('perspective',$('#route-source',page).value);}
     try{
-      const next=await api('geography?'+query);if(!valid()||token!==request)return;data=next;appliedParams=Object.fromEntries(query);selected=null;$('#geo-popup',page).hidden=true;
-      $('#geo-stats',page).innerHTML=`<div><span>Media nel periodo</span><strong>${data.mean==null?'—':number(data.mean)}</strong><small>MOS · pesata sul tempo</small></div><div><span>Zone con MOS</span><strong>${data.cells.length}</strong><small>celle da ${number(data.cell)} m</small></div><div><span>Tempo localizzato</span><strong>${number(data.seconds/60)} <small>min</small></strong><small>somma degli intervalli deduplicati</small></div><div><span>Archivio posizioni</span><strong>${data.extent[2]}</strong><small>evidenze conservate, anche ripetute</small></div>`;
+      const next=await api((callMode?'call-route?':'geography?')+query);if(!valid()||token!==request)return;data=next;appliedParams=Object.fromEntries(query);selected=null;$('#geo-popup',page).hidden=true;
+      if(callMode){
+        $('#route-source',page).innerHTML=data.sources.map(s=>`<option value="${s.id}">${esc(s.label)} · P${s.id}</option>`).join('');$('#route-source',page).value=data.perspective_id||'';
+        $('#route-point',page).innerHTML='<option value="">Seleziona un punto…</option>'+data.points.map(p=>`<option value="${p.id}">${esc(p.ts)} · ${p.value===null?'senza valore':number(p.value)+' PQ'}${p.kind==='cached'?' · cache':''}</option>`).join('');
+        $('#geo-stats',page).innerHTML=`<div><span>Media campioni localizzati</span><strong>${data.mean===null?'—':number(data.mean)}</strong><small>Perceptual Quality</small></div><div><span>Posizioni registrate</span><strong>${data.points.length}</strong></div><div><span>Celle con qualità</span><strong>${data.cells.length}</strong><small>${data.samples} finestre campionate</small></div>`;
+        $('#geo-context',page).textContent=data.end_basis==='last_call_evidence'?'Fine chiamata non registrata: copertura limitata all’ultima evidenza attribuita alla chiamata.':'';
+        $('#geo-status',page).textContent=data.points.length?`${data.points.length} posizioni · celle da ${data.cell} m · percorso della sola sorgente selezionata.`:'Nessuna posizione locale attribuibile a questa chiamata e sorgente.';
+        $('.geo-legend',page).innerHTML='<span>Perceptual Quality: 0 → 100 · rosso → verde</span><span>Grigio: consulta il motivo</span><span>○ Cache · linea tratteggiata: collegamento indicativo</span>';
+        $('#geo-method-note',page).textContent='Qualità = 100 − percentuale di tempo in underrun AWT. Nessun underrun durante la chiamata = 100. Finestre di 1 s, ritagliate e normalizzate sulla porzione attiva ai confini. Ogni cella è la media delle finestre distinte localizzate. Inizio e fine indicano il primo e ultimo messaggio di posizione non cached. Collegamenti indicativi, interrotti oltre 30 s: non ricostruiscono il tragitto reale né qualità fra i punti. Le posizioni dalla cache non fanno parte del percorso.';
+        $('#geo-detail',page).innerHTML='<h3>Esplora il percorso</h3><p>Seleziona un punto o un quadrato per vedere qualità ed evidenze. Il selettore “Posizione registrata” permette di distinguere passaggi ripetuti nello stesso luogo.</p>';
+        if(first)fit(data.locations.map(c=>c.bounds),17);redraw();return;
+      }
+      $('#geo-stats',page).innerHTML=`<div><span>Media nel periodo</span><strong>${data.mean==null?'—':number(data.mean)}</strong><small>${metricLabel()} · ${pq?'media dei secondi campionati':'pesata sul tempo'}</small></div><div><span>Zone con ${metricLabel()}</span><strong>${data.cells.length}</strong><small>celle da ${number(data.cell)} m</small></div><div><span>${pq?'Secondi campionati':'Tempo localizzato'}</span><strong>${number(pq?data.seconds:data.seconds/60)} <small>${pq?'s':'min'}</small></strong><small>somma degli intervalli deduplicati</small></div><div><span>Archivio posizioni</span><strong>${data.extent[2]}</strong><small>evidenze conservate, anche ripetute</small></div>`;
       const operators=$('#geo-operator',page),operatorValue=operators.value;
       operators.innerHTML='<option value="all">Tutti</option><option value="unknown">Sconosciuto</option>'+data.mobility.operators.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');operators.value=operatorValue;
-      $('#geo-context',page).textContent=`Accesso noto: ${data.network_known_percent==null?'—':number(data.network_known_percent)+'%'} del tempo MOS selezionato. Archivio movimento: ${data.mobility.samples} campioni in ${data.mobility.sequences} sequenze locali; ${data.mobility.network_observations} osservazioni di rete. Nessuna previsione attiva. Stato di rete utilizzabile per massimo ${data.mobility.network_max_age_seconds} s.`;
-      $('#geo-status',page).textContent=data.cells.length?`${data.cells.length} zone · ${data.quality==='fresh'?'nuovi aggiornamenti locali':'incluse posizioni SIP dichiarate, età reale ignota'} · celle tratteggiate con copertura limitata.`:'Nessun MOS localizzabile con questi filtri. I punti grigi indicano solo posizioni note: non qualità buona.';
+      $('#geo-context',page).textContent=`Accesso noto: ${data.network_known_percent==null?'—':number(data.network_known_percent)+'%'} del tempo ${metricLabel()} selezionato. Archivio movimento: ${data.mobility.samples} campioni in ${data.mobility.sequences} sequenze locali; ${data.mobility.network_observations} osservazioni di rete. Nessuna previsione attiva. Stato di rete utilizzabile per massimo ${data.mobility.network_max_age_seconds} s.`;
+      $('#geo-status',page).textContent=data.cells.length?`${data.cells.length} zone · ${data.quality==='fresh'?'nuovi aggiornamenti locali':'incluse posizioni SIP dichiarate, età reale ignota'} · celle tratteggiate con copertura limitata.`:`Nessun ${metricLabel()} localizzabile con questi filtri. I punti grigi indicano solo posizioni note.`;
+      data.cells.sort((a,b)=>a.mean-b.mean);
+      $('.geo-ranking p',page).textContent=`Media ${metricLabel()} crescente nel periodo selezionato.`;
+      $('.geo-legend',page).innerHTML=pq?'<span>Perceptual Quality: 0 → 100 · rosso → verde</span><span><i class="geo-grey"></i> Senza valore</span><small>Tratteggio: meno di 60 campioni o un solo giorno; nessuna soglia percettiva validata</small>':'<span><i class="geo-red"></i> &lt;3</span><span><i class="geo-amber"></i> 3–4</span><span><i class="geo-green"></i> ≥4</span><span><i class="geo-grey"></i> Senza MOS</span>';
+      $('#geo-method-note',page).textContent=pq?'Perceptual Quality = 100 − percentuale di tempo in underrun AWT. Finestre di 1 s, ritagliate e normalizzate sulla porzione attiva ai confini della chiamata; inizio/fine osservati, durata dichiarata come fallback. Durante la chiamata, assenza di underrun registrati = 100, anche senza heartbeat o contatori AWT; un episodio aperto resta attivo fino alla fine della chiamata o alla ricreazione del device. Si usa solo il secondo che contiene la posizione, senza mantenimento per 120 s né interpolazione del percorso. La media descrive i secondi campionati, non tutta la permanenza nella cella. Le posizioni SIP hanno età reale ignota. Indicatore operativo, non MOS percettivo validato.':'MOS a profilo fisso dalla sola perdita RTCP. Media pesata sul tempo. Posizioni legacy mantenute al massimo 120 s; coordinate SIP dichiarate con età reale ignota.';
       $('#geo-ranking',page).innerHTML=data.cells.slice(0,12).map((c,i)=>`<button class="geo-zone" data-zone="${i}"><span class="geo-zone-dot" data-color="${color(c.mean)}"></span><span>Zona ${i+1}<small>${number(c.seconds)} s · ${c.days} giorni</small></span><strong>${number(c.mean)}</strong></button>`).join('')||'<p class="muted">Nessuna zona valutabile.</p>';
       $$('.geo-zone-dot',page).forEach(e=>e.style.background=e.dataset.color);
       $$('.geo-zone',page).forEach(b=>b.onclick=()=>{const c=data.cells[+b.dataset.zone];fit([c.bounds]);show(c);});
-      $('#geo-detail',page).innerHTML='<span class="eyebrow">ESPLORA UNA ZONA</span><h2>Seleziona una cella.</h2><p>La media considera solo gli intervalli coperti. I periodi senza report non diventano MOS zero.</p>';
+      $('#geo-detail',page).innerHTML='<span class="eyebrow">ESPLORA UNA ZONA</span><h2>Seleziona una cella.</h2><p>La media considera solo i campioni valutabili. I periodi senza dati restano senza valore.</p>';
       if(data.locations_truncated)$('#geo-status',page).textContent+=' Posizioni grigie limitate: restringere il periodo.';
       if(data.conflicting_intervals)$('#geo-status',page).textContent+=` ${data.conflicting_intervals} intervalli esclusi per posizioni discordanti.`;
       if(first){range();fit((data.cells.length?data.cells:data.locations).map(c=>c.bounds),12);}
@@ -228,13 +284,15 @@ async function renderGeography(page, renderId) {
     }catch(error){if(valid()&&token===request){$('#geo-status',page).textContent=error.message;data=null;$('#geo-popup',page).hidden=true;$('#geo-detail',page).textContent='Correggere i filtri per ricalcolare la mappa.';$('#geo-stats',page).innerHTML='';$('#geo-context',page).textContent='';$('#geo-ranking',page).innerHTML='';redraw();}}
   }
   $('#geo-apply',page).onclick=()=>load();
-  for(const k of ['cell','direction','quality','platform','access','upstream','operator'])$('#geo-'+k,page).onchange=()=>load();
+  if(callMode){$('#route-source',page).onchange=()=>load(true);$('#route-point',page).onchange=()=>{const p=data?.points.find(p=>p.id===+$('#route-point',page).value);if(p){center=project([p.longitude,p.latitude]);showPoint(p);}};}
+  for(const k of ['metric','cell','direction','quality','platform','access','upstream','operator'])$('#geo-'+k,page).onchange=()=>load();
   $('#geo-period',page).onchange=()=>{range();load();};
   for(const k of ['start','end'])$('#geo-'+k,page).onchange=()=>{$('#geo-period',page).value='custom';$('#geo-time-label',page).textContent='Date personalizzate';};
   $('#geo-time',page).oninput=()=>{if(['all','custom'].includes($('#geo-period',page).value))$('#geo-period',page).value='30';range();clearTimeout(timer);timer=setTimeout(()=>load(),250);};
   for(const [id,sign] of [['prev',-1],['next',1]])$('#geo-'+id,page).onclick=()=>{$('#geo-time',page).value=Math.max(0,Math.min(1000,Number($('#geo-time',page).value)+sign*50));$('#geo-time',page).oninput();};
   const observer=new ResizeObserver(resize);observer.observe(canvas);
-  chartCleanup=()=>{dead=true;observer.disconnect();clearTimeout(timer);if(frame)cancelAnimationFrame(frame);for(const img of tiles.values()){img.onload=null;img.onerror=null;}};
+  const previousCleanup=callMode?chartCleanup:null;
+  chartCleanup=()=>{previousCleanup?.();dead=true;observer.disconnect();clearTimeout(timer);if(frame)cancelAnimationFrame(frame);for(const img of tiles.values()){img.onload=null;img.onerror=null;}};
   resize();
   try{if(!geographyBase)geographyBase=await (await fetch('/basemap.json')).json();if(valid())redraw();}catch(e){if(valid())$('#geo-status',page).textContent='Base geografica offline non disponibile.';}
   if(valid())await load(true);

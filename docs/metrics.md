@@ -13,7 +13,7 @@ Le schede sotto sono il riferimento tecnico; il metodo MOS completo è in [mos.m
 - **Flow / SSRC / device**: restano distinti; non aggregare flussi o destinatari diversi. Il device selezionato nella diagnostica filtra le metriche VD; RTT mostra separatamente tutti i flow/SSRC attribuiti alla prospettiva.
 - **sample / gauge**: osservazione al timestamp. **event**: aggiornamento esplicito, senza interpolazione. **counter**: contatore cumulativo soggetto a reset. **interval**: valore riferito a un intervallo (delta oppure finestra esplicita). **step**: valore mantenuto fino a una scadenza dichiarata; il MOS legacy usa questa rappresentazione.
 - **last / avg / min / max**: statistiche riportate da KPE, non calcolate dall’analizzatore. Non è nota automaticamente la loro finestra temporale. La media nelle tabelle RTCP è aritmetica sui campioni, non pesata per durata o pacchetti.
-- **Unità**: µs ÷ 1000 = ms; ms ÷ 1000 = s. Il DB conserva le metriche VD in ms, compreso il contatore di silenzio; Diagnostica A/B consente di scegliere ms oppure secondi; il grafico della chiamata mantiene ms. `raw` significa unità non confermata.
+- **Unità**: µs ÷ 1000 = ms; ms ÷ 1000 = s. Le durate VD con unità esplicita sono normalizzate in ms; byte, pacchetti, campioni, chunk e conteggi mantengono le rispettive unità. Solo il silenzio saltato cumulativo può essere visualizzato in secondi in Diagnostica A/B; i delta restano in ms. `raw` significa unità non confermata. Lo stesso nome può avere valori ms e raw: le serie rimangono separate.
 - **Validità**: valori finiti negativi e percentuali fuori 0–100 restano con `valid=0`. Valori mancanti, non numerici, NaN e infinito non diventano zero. La diagnostica esclude i campioni invalidi.
 - **Provenienza**: `metrics.event_id` porta a `events` e al file. `source_line` è la riga precisa del campo per il nuovo estrattore; se nulla usare `events.line_no`, inizio del record. `raw_value/raw_unit` preservano la conversione del nuovo estrattore; possono essere null per metriche precedenti.
 - **Orologio**: timestamp originali invariati, senza fuso dedotto. L’offset della sorgente, in secondi, si somma solo per allineamento nei grafici e derivazioni diagnostiche. Un offset positivo sposta la sorgente in avanti.
@@ -67,13 +67,197 @@ Gerarchia e funzionamento confermati dal referente VDK; unità e campi specifici
 - `lifecycle`: Ciclo delimitato da creazioni osservate; unknown non dimostra continuità.
 - `direction`: Direzione osservata del trasporto; distinta da VID/VOD. outgoing nei report RTCP descrive la ricezione del peer.
 
+## Verifica delle unità, metrica per metrica
+
+Inventario verificato sui campi riconosciuti da parser.py, enrichment.py e periodic.py,
+sulle finestre di telemetria e sui calcoli derivati. L’unità dei campioni resta
+la fonte per l’asse verticale; una voce di catalogo non converte dati raw.
+Le sei statistiche KPE raw restano non confermate in assenza di evidenza del produttore.
+
+`derived.silence_played_delta` è in **millisecondi (ms)**: il campo di partenza
+contiene **msecs**, non usecs. Esempio: 100 → 125 ms produce un incremento di
+25 ms tra i due campioni, non 25 µs, non 25 ms/s e non una percentuale.
+
+| Metrica | Unità nel grafico / CSV | Campo originale o derivazione |
+|---|---|---|
+| `telemetry.network_loss` | % · percentuale | Telemetria strutturata: rtp-sequence-window/1 oppure delta dei contatori RTCP SR/RR. |
+| `vd.missing_packets` | pacchetti | [NARTn of Line m] Packet loss occurred … SN delta is … (N missing packets) |
+| `rtcp.rtt` | ms · millisecondi | RTT to this source: … ms; RTT by this source: … microseconds (÷1000) |
+| `rtcp.jitter` | ms · millisecondi | Jitter we perceive …; Receiver Report - jitter perceived by this remote peer … |
+| `rtcp.loss` | % · percentuale | Packet loss we perceive …; Receiver Report - remote peer pkt loss … |
+| `rtcp.packets_received` | pacchetti | Packet we received from this source (total) |
+| `network.ping` | ms · millisecondi | received … bytes … time=… ms |
+| `vd.max_arrival_delay` | ms · millisecondi | m_maxPktArrivalTimeDelay to ms …; campo periodico m_maxPktArrivalTimeDelay (ms): … |
+| `vd.dejitter_target` | ms · millisecondi | ring current max buffer usecs (for dynamic dejittering): … (÷1000) |
+| `vd.buffer` | ms · millisecondi | buffer len in usecs: … (÷1000); Audio currently in buffer (ms): … |
+| `vd.silence_skipped` | ms · millisecondi | silence usecs skipped so far: … (÷1000); silence msecs skipped so far: … |
+| `derived.silence_delta` | ms · millisecondi | Differenza tra campioni consecutivi di vd.silence_skipped, separati per prospettiva, observer, device, output, input, ciclo di vita, direzione, flow e SSRC; massimo 30 s e due eventi di evidenza. |
+| `derived.buffer_sum` | ms · millisecondi | Somma di vd.buffer dei due device scelti dopo correzione degli orologi; interpolazione lineare nei soli intervalli comuni. |
+| `derived.dejitter_sum` | ms · millisecondi | Somma di vd.dejitter_target di A e B con interpolazione lineare solo nella copertura comune e con intervalli al massimo di 30 s. |
+| `incident.buffer_underrun` | ms · millisecondi | Buffer underrun occurred; Still in buffer underrun … Event is currently … msecs; Buffer underrun event terminated … Event was … msecs long. |
+| `incident.media_missing` | ms · millisecondi | Line … reported that flow … has not received RTP media for more than … sec/ms; has re-started receiving RTP media / has started receiving RTP media again. |
+| `kpe.audio.dtmf_rtt` | raw · unità non confermata | JSON incoming/outgoing → audio → dtmf_rtt → last/avg/min/max |
+| `kpe.audio.jitter` | raw · unità non confermata | JSON incoming/outgoing → audio → jitter → last/avg/min/max |
+| `kpe.audio.jitter_rfc3550` | raw · unità non confermata | JSON incoming/outgoing → audio → jitter_rfc3550 → last/avg/min/max |
+| `kpe.audio.ploss_jitter` | raw · unità non confermata | JSON incoming/outgoing → audio → ploss_jitter → last/avg/min/max |
+| `kpe.common.ploss` | raw · unità non confermata | JSON incoming/outgoing → common → ploss → last/avg/min/max |
+| `kpe.common.rtt` | raw · unità non confermata | JSON incoming/outgoing → common → rtt → last/avg/min/max |
+| `kpe.common.rtp_pkt_rx` | pacchetti | JSON incoming/outgoing → common → rtp_pkt_rx → last/avg/min/max |
+| `kpe.common.rtp_pkt_tx` | pacchetti | JSON incoming/outgoing → common → rtp_pkt_tx → last/avg/min/max |
+| `derived.mos_reference` | MOS · indice senza unità | Perdita RTCP (%) locale o dichiarata dal peer, oppure perdita da finestre strutturate verificate. Profilo loss-reference-1: G.711 10 ms, PLC Appendix I, Ie=0, Bpl=25.1, BurstR=1, R base=93.2. |
+| `vd.samples_skipped` | campioni audio | audio samples skipped so far |
+| `vd.buffer_hard_max` | ms · millisecondi | ring hard max buffer usecs (µs ÷ 1000; originali raw_value/raw_unit) |
+| `vd.buffer_min` | ms · millisecondi | ring min buffer usecs (µs ÷ 1000; originali raw_value/raw_unit) |
+| `vd.underruns` | conteggio | number of buffer underruns occurred on this ring for this VOD |
+| `vd.silence_played` | ms · millisecondi | silence msecs played out for buffer underruns occurred on this ring for this VOD |
+| `vd.bytes_read` | byte | Total bytes read from source |
+| `vd.bytes_decoder` | byte | Total bytes sent to decoder |
+| `vd.chunks_decoder` | chunk | Total packets/chunks sent to decoder |
+| `vd.media_read` | ms · millisecondi / raw · unità non confermata | Total media read from middleware: … ms (senza suffisso: raw) |
+| `vd.media_sent` | ms · millisecondi / raw · unità non confermata | Total media sent out: … ms (senza suffisso: raw) |
+| `vd.media_middleware` | ms · millisecondi / raw · unità non confermata | Total media sent to middleware: … ms (senza suffisso: raw) |
+| `vd.scheduling_resets` | conteggio | Number of device reset for scheduling delay |
+| `vd.packets_all` | pacchetti | ALL Pkts received so far |
+| `vd.packets_rtp` | pacchetti | RTP Pkts received so far |
+| `vd.packets_rtcp` | pacchetti | RTCP Pkts received so far |
+| `vd.packets_rtp_good` | pacchetti | RTP GOOD Pkts received so far |
+| `vd.packets_rtp_bad` | pacchetti | RTP BAD Pkts received so far |
+| `vd.read_errors` | conteggio | Number of Read Errors |
+| `vd.read_error_duration` | ms · millisecondi | Current read error event duration (msecs) |
+| `vd.write_errors` | conteggio | Number of Write Errors |
+| `vd.write_error_duration` | ms · millisecondi | Current write error event duration (msecs) |
+| `vd.encoding_errors` | conteggio | Number of Encoding Errors |
+| `vd.encoding_error_duration` | ms · millisecondi | Current encoding error event duration (msecs) |
+| `vd.decoding_errors` | conteggio | Number of Decoding Errors |
+| `vd.decoding_error_duration` | ms · millisecondi | Current decoding error event duration (msecs) |
+| `vd.streak_good` | pacchetti | RTP last streak of GOOD Pkts received |
+| `vd.streak_bad` | pacchetti | RTP last streak of BAD Pkts received |
+| `vd.write_rate` | campioni audio/s | Cumulative write rate is … samples per second |
+| `vd.scheduling_delay` | ms · millisecondi | Accumulated delay is … ms |
+| `vd.underrun_duration` | ms · millisecondi | Currently in underrun for this VOD since … msecs |
+| `vd.heartbeat_bytes_read` | byte | read bytes: … (heartbeat; finestra dei byte non confermata) |
+| `vd.heartbeat_bytes_written` | byte | written bytes … (heartbeat; finestra dei byte non confermata) |
+| `vd.heartbeat_window` | ms · millisecondi | Running cycles (last … ms) |
+| `vd.cycles_tbody_runs` | conteggio | Running cycles: conteggio della fase tbody_runs; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `vd.cycles_read` | conteggio | Running cycles: conteggio della fase read; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `vd.cycles_decode` | conteggio | Running cycles: conteggio della fase decode; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `vd.cycles_adapttomw` | conteggio | Running cycles: conteggio della fase adapttomw; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `vd.cycles_append` | conteggio | Running cycles: conteggio della fase append; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `vd.cycles_readfrommw` | conteggio | Running cycles: conteggio della fase readfrommw; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `vd.cycles_adapttocodec` | conteggio | Running cycles: conteggio della fase adapttocodec; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `vd.cycles_encode` | conteggio | Running cycles: conteggio della fase encode; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `vd.cycles_write` | conteggio | Running cycles: conteggio della fase write; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio. |
+| `rtcp.packets_sent_total` | pacchetti | Sender Report - Number of packets sent by this remote peer (total) |
+| `rtcp.packets_sent_interval` | pacchetti | Sender Report - Number of packets sent by this remote peer (since last report) |
+| `rtcp.packets_received_interval` | pacchetti | Packet we received from this source (since last report) |
+| `rtcp.packets_lost_total` | pacchetti | Receiver Report - pkt lost by this peer (total) |
+| `rtcp.packets_lost_interval` | pacchetti | Receiver Report - pkt lost by this peer (since last report) |
+| `derived.silence_played_delta` | ms · millisecondi | Differenza tra campioni consecutivi di vd.silence_played, separati per prospettiva, observer, device, output, input, ciclo di vita, direzione, flow e SSRC; massimo 30 s e due eventi di evidenza. |
+| `derived.perceptual_quality` | PQ · indice 0–100 | AWT: Buffer underrun event terminated … Event was … msecs long; contatore silence msecs played out for buffer underruns. |
+
+## Verifica di direzione e tipo, metrica per metrica
+
+Le metriche di device e i delta conservano il contesto di origine. Un input
+microfono verso NAWT è elaborazione locale in trasmissione; NART è ricezione.
+Un percorso NART → NAWT coinvolge entrambe e non viene forzato in una sola
+direzione. Il solo nome di un osservatore, microfono, speaker o file non prova
+la tratta. Scheduling locale, I/O e fenomeni del buffer non sono misure di
+perdita di rete. Un ruolo xcoder/unknown non diventa automaticamente app.
+
+La selezione può raccogliere più contesti: il menu lo segnala e ogni serie
+mantiene la propria interpretazione. In assenza di ruolo confermato le etichette
+upstream/downstream indicano “app presunta”. La legenda distingue contatori,
+valori istantanei, eventi, incrementi su intervallo e statistiche last/avg/min/max;
+il valore tecnico statistic=sample resta compatibile nelle API.
+
+| Metrica | Tipo dichiarato | Regola di direzione / origine della misura |
+|---|---|---|
+| `telemetry.network_loss` | interval | Perdita su intervallo verificato del ricevitore locale (incoming) o del peer (outgoing). |
+| `vd.missing_packets` | event | Ricezione RTP locale NART/flow; preservare device e flusso senza dedurre una causa di rete. |
+| `rtcp.rtt` | sample | Andata e ritorno RTP/RTCP; non assegnare upstream o downstream. |
+| `rtcp.jitter` | sample | Incoming: ricezione locale; outgoing: ricezione dichiarata dal peer. Il verso del report non è il verso del media misurato. |
+| `rtcp.loss` | sample | Incoming: ricezione locale; outgoing: ricezione dichiarata dal peer. Il verso del report non è il verso del media misurato. |
+| `rtcp.packets_received` | counter | Pacchetti ricevuti localmente; non confondere con quelli soltanto dichiarati come inviati dal peer. |
+| `network.ping` | sample | Sonda ICMP verso la destinazione osservata; non identifica automaticamente il peer RTP. |
+| `vd.max_arrival_delay` | event / gauge | Ricezione RTP locale NART/flow; preservare device e flusso senza dedurre una causa di rete. |
+| `vd.dejitter_target` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.buffer` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.silence_skipped` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `derived.silence_delta` | interval | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `derived.buffer_sum` | derived gauge | Indicatore dei due device scelti A+B; non una direzione né una latenza end-to-end. |
+| `derived.dejitter_sum` | derived gauge | Indicatore dei due device scelti A+B; non una direzione né una latenza end-to-end. |
+| `incident.buffer_underrun` | episode | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `incident.media_missing` | episode | Ricezione RTP locale NART/flow; preservare device e flusso senza dedurre una causa di rete. |
+| `kpe.audio.dtmf_rtt` | reported statistic | Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream. |
+| `kpe.audio.jitter` | reported statistic | Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream. |
+| `kpe.audio.jitter_rfc3550` | reported statistic | Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream. |
+| `kpe.audio.ploss_jitter` | reported statistic | Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream. |
+| `kpe.common.ploss` | reported statistic | Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream. |
+| `kpe.common.rtt` | reported statistic | Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream. |
+| `kpe.common.rtp_pkt_rx` | reported statistic | Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream. |
+| `kpe.common.rtp_pkt_tx` | reported statistic | Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream. |
+| `derived.mos_reference` | derived step | Stima sulla perdita del ricevitore locale (incoming) o del peer (outgoing), non qualità misurata. |
+| `vd.samples_skipped` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.buffer_hard_max` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.buffer_min` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.underruns` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.silence_played` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.bytes_read` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.bytes_decoder` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.chunks_decoder` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.media_read` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.media_sent` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.media_middleware` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.scheduling_resets` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.packets_all` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.packets_rtp` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.packets_rtcp` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.packets_rtp_good` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.packets_rtp_bad` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.read_errors` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.read_error_duration` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.write_errors` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.write_error_duration` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.encoding_errors` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.encoding_error_duration` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.decoding_errors` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.decoding_error_duration` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.streak_good` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.streak_bad` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.write_rate` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.scheduling_delay` | counter | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.underrun_duration` | gauge | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.heartbeat_bytes_read` | reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.heartbeat_bytes_written` | reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.heartbeat_window` | interval | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_tbody_runs` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_read` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_decode` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_adapttomw` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_append` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_readfrommw` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_adapttocodec` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_encode` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `vd.cycles_write` | counter / reported statistic | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `rtcp.packets_sent_total` | counter | Pacchetti inviati dal peer secondo il Sender Report; non prova che siano arrivati localmente. |
+| `rtcp.packets_sent_interval` | interval | Pacchetti inviati dal peer secondo il Sender Report; non prova che siano arrivati localmente. |
+| `rtcp.packets_received_interval` | interval | Pacchetti ricevuti localmente; non confondere con quelli soltanto dichiarati come inviati dal peer. |
+| `rtcp.packets_lost_total` | counter | Pacchetti persi nella ricezione del peer secondo il Receiver Report; non perdita della ricezione locale. |
+| `rtcp.packets_lost_interval` | interval | Pacchetti persi nella ricezione del peer secondo il Receiver Report; non perdita della ricezione locale. |
+| `derived.silence_played_delta` | interval | Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream. |
+| `derived.perceptual_quality` | interval | Continuità del percorso locale NART → AWT; sola ricezione locale, nessun report del peer. |
+
 ## Schede
 
 ### Perdita RTP su intervallo verificato — `telemetry.network_loss`
 
-**Unità:** %. **Tipo:** interval.
+**Unità:** % · percentuale. **Tipo:** interval.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Telemetria strutturata: rtp-sequence-window/1 oppure delta dei contatori RTCP SR/RR.
 
 Perdita riferita a una finestra esplicita, prima di PLC/FEC e scarti di playout. Timestamp UTC derivato dal tempo monotono; originali ed evidenze conservati.
+
+**Direzione e contesto:** Perdita su intervallo verificato del ricevitore locale (incoming) o del peer (outgoing).
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -83,9 +267,13 @@ Perdita riferita a una finestra esplicita, prima di PLC/FEC e scarti di playout.
 
 ### Pacchetti mancanti per evento NART — `vd.missing_packets`
 
-**Unità:** packets. **Tipo:** event.
+**Unità:** pacchetti. **Tipo:** event.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: [NARTn of Line m] Packet loss occurred … SN delta is … (N missing packets)
 
 Numero esplicito di pacchetti segnalati come mancanti in un singolo salto della sequenza. Un punto isolato al timestamp del messaggio.
+
+**Direzione e contesto:** Ricezione RTP locale NART/flow; preservare device e flusso senza dedurre una causa di rete.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -95,9 +283,13 @@ Numero esplicito di pacchetti segnalati come mancanti in un singolo salto della 
 
 ### RTT RTCP — `rtcp.rtt`
 
-**Unità:** ms. **Tipo:** sample.
+**Unità:** ms · millisecondi. **Tipo:** sample.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: RTT to this source: … ms; RTT by this source: … microseconds (÷1000)
 
 Tempo di andata e ritorno riportato per la sorgente RTP/RTCP.
+
+**Direzione e contesto:** Andata e ritorno RTP/RTCP; non assegnare upstream o downstream.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -107,9 +299,13 @@ Tempo di andata e ritorno riportato per la sorgente RTP/RTCP.
 
 ### Jitter RTCP — `rtcp.jitter`
 
-**Unità:** ms. **Tipo:** sample.
+**Unità:** ms · millisecondi. **Tipo:** sample.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Jitter we perceive …; Receiver Report - jitter perceived by this remote peer …
 
 Variabilità degli arrivi riportata localmente (incoming) o dal peer (outgoing).
+
+**Direzione e contesto:** Incoming: ricezione locale; outgoing: ricezione dichiarata dal peer. Il verso del report non è il verso del media misurato.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -119,9 +315,13 @@ Variabilità degli arrivi riportata localmente (incoming) o dal peer (outgoing).
 
 ### Perdita RTCP — `rtcp.loss`
 
-**Unità:** %. **Tipo:** sample.
+**Unità:** % · percentuale. **Tipo:** sample.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Packet loss we perceive …; Receiver Report - remote peer pkt loss …
 
 Percentuale di perdita riferita all’intervallo dichiarato dal report.
+
+**Direzione e contesto:** Incoming: ricezione locale; outgoing: ricezione dichiarata dal peer. Il verso del report non è il verso del media misurato.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -131,9 +331,13 @@ Percentuale di perdita riferita all’intervallo dichiarato dal report.
 
 ### Pacchetti ricevuti — `rtcp.packets_received`
 
-**Unità:** packets. **Tipo:** counter.
+**Unità:** pacchetti. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Packet we received from this source (total)
 
 Contatore dei pacchetti ricevuti per sorgente.
+
+**Direzione e contesto:** Pacchetti ricevuti localmente; non confondere con quelli soltanto dichiarati come inviati dal peer.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -143,9 +347,13 @@ Contatore dei pacchetti ricevuti per sorgente.
 
 ### Ping ICMP — `network.ping`
 
-**Unità:** ms. **Tipo:** sample.
+**Unità:** ms · millisecondi. **Tipo:** sample.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: received … bytes … time=… ms
 
 Tempo di andata e ritorno della sonda ICMP.
+
+**Direzione e contesto:** Sonda ICMP verso la destinazione osservata; non identifica automaticamente il peer RTP.
 
 **Ambito:** Sonda di rete. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -155,9 +363,13 @@ Tempo di andata e ritorno della sonda ICMP.
 
 ### Massimo ritardo di arrivo NART — `vd.max_arrival_delay`
 
-**Unità:** ms. **Tipo:** event / gauge.
+**Unità:** ms · millisecondi. **Tipo:** event / gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: m_maxPktArrivalTimeDelay to ms …; campo periodico m_maxPktArrivalTimeDelay (ms): …
 
 Valore dichiarato dal motore per il massimo ritardo di arrivo. Nei WARNING è un aggiornamento del massimo.
+
+**Direzione e contesto:** Ricezione RTP locale NART/flow; preservare device e flusso senza dedurre una causa di rete.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -167,9 +379,13 @@ Valore dichiarato dal motore per il massimo ritardo di arrivo. Nei WARNING è un
 
 ### Limite dinamico dejitter — `vd.dejitter_target`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: ring current max buffer usecs (for dynamic dejittering): … (÷1000)
 
 Limite corrente del ring buffer nel device indicato nel contesto; su NART sostiene il dejittering della ricezione RTP.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -179,9 +395,13 @@ Limite corrente del ring buffer nel device indicato nel contesto; su NART sostie
 
 ### Audio nel buffer del device — `vd.buffer`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: buffer len in usecs: … (÷1000); Audio currently in buffer (ms): …
 
 Durata dell’audio presente nel buffer del device indicato nel contesto; su NART riguarda la ricezione RTP, sugli altri VID la rispettiva sorgente media.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -191,9 +411,13 @@ Durata dell’audio presente nel buffer del device indicato nel contesto; su NAR
 
 ### Silenzio saltato cumulativo — `vd.silence_skipped`
 
-**Unità:** ms (grafico: ms o s). **Tipo:** counter.
+**Unità:** ms · millisecondi. **Tipo:** counter.
+
+**Lettura dell’unità:** Durata cumulativa in ms; i campi usecs sono divisi per 1000, i campi msecs restano invariati. Solo Diagnostica A/B può visualizzare questo contatore in secondi (ms ÷ 1000); i delta restano in ms.
 
 Durata cumulativa del silenzio saltato dichiarata dal device. In Diagnostica A/B si può scegliere ms oppure dividere ancora per 1000 per mostrare secondi; nel dettaglio chiamata resta in ms.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -203,21 +427,29 @@ Durata cumulativa del silenzio saltato dichiarata dal device. In Diagnostica A/B
 
 ### Incremento silenzio saltato — `derived.silence_delta`
 
-**Unità:** ms. **Tipo:** interval.
+**Unità:** ms · millisecondi. **Tipo:** interval.
+
+**Lettura dell’unità:** Millisecondi: differenza di vd.silence_skipped dopo la normalizzazione µs ÷ 1000, quando necessaria. È una durata nell’intervallo, non un tasso ms/s.
 
 Quantità aggiuntiva nel periodo fra i due campioni; mostrata al timestamp del secondo.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Differenza tra due campioni consecutivi di vd.silence_skipped, stessa prospettiva e device..
+**Origine e calcolo:** Differenza tra campioni consecutivi di vd.silence_skipped, separati per prospettiva, observer, device, output, input, ciclo di vita, direzione, flow e SSRC; massimo 30 s e due eventi di evidenza..
 
-**Limiti:** Il primo valore, un calo del contatore e un intervallo >30 s non producono delta. Non è un tasso al secondo. Entrambi gli eventi sono indicati come evidenza.
+**Limiti:** Il primo valore, un calo del contatore e un intervallo >30 s non producono delta. Non è un tasso al secondo. Entrambi gli eventi sono indicati come evidenza. La direzione è quella del contesto originale: Default Audio Input → NAWT è elaborazione locale in trasmissione, non ricezione downstream. Il delta non prova silenzio del microfono, perdita RTP o audio effettivamente ascoltato dal peer.
 
 ### Somma dei buffer A+B — `derived.buffer_sum`
 
-**Unità:** ms. **Tipo:** derived gauge.
+**Unità:** ms · millisecondi. **Tipo:** derived gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Somma di vd.buffer dei due device scelti dopo correzione degli orologi; interpolazione lineare nei soli intervalli comuni.
 
 Indicatore del buffering combinato dei due punti di vista, utile per confrontare gli andamenti.
+
+**Direzione e contesto:** Indicatore dei due device scelti A+B; non una direzione né una latenza end-to-end.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -227,9 +459,13 @@ Indicatore del buffering combinato dei due punti di vista, utile per confrontare
 
 ### Somma dei limiti dinamici A+B — `derived.dejitter_sum`
 
-**Unità:** ms. **Tipo:** derived gauge.
+**Unità:** ms · millisecondi. **Tipo:** derived gauge.
 
-Limiti dinamici combinati dei buffer di ricezione NART; distinto dalla somma dell’audio realmente in coda.
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Somma di vd.dejitter_target di A e B con interpolazione lineare solo nella copertura comune e con intervalli al massimo di 30 s.
+
+Somma dei limiti dinamici dei buffer dei due device scelti. Su NART riguarda il dejittering di ricezione; la selezione di altri device non dimostra quel percorso. Distinta dalla somma dell’audio realmente in coda.
+
+**Direzione e contesto:** Indicatore dei due device scelti A+B; non una direzione né una latenza end-to-end.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -239,9 +475,13 @@ Limiti dinamici combinati dei buffer di ricezione NART; distinto dalla somma del
 
 ### Episodio di buffer underrun — `incident.buffer_underrun`
 
-**Unità:** ms. **Tipo:** episode.
+**Unità:** ms · millisecondi. **Tipo:** episode.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Buffer underrun occurred; Still in buffer underrun … Event is currently … msecs; Buffer underrun event terminated … Event was … msecs long.
 
 Periodo in cui l’osservatore non ottiene audio dal device NART selezionato. La durata dichiarata dal motore resta distinta dalla distanza fra timestamp dei messaggi.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -251,9 +491,13 @@ Periodo in cui l’osservatore non ottiene audio dal device NART selezionato. La
 
 ### Episodio di media missing — `incident.media_missing`
 
-**Unità:** ms (minimo stimato). **Tipo:** episode.
+**Unità:** ms · millisecondi. **Tipo:** episode.
+
+**Lettura dell’unità:** Durata in ms, con limite inferiore stimato dalle notifiche. “Minimo stimato” descrive la stima, non una diversa unità.
 
 Assenza RTP segnalata su una linea e un flow. La soglia prima della segnalazione si aggiunge al tempo fino alla ripresa per stimare un limite inferiore della durata.
+
+**Direzione e contesto:** Ricezione RTP locale NART/flow; preservare device e flusso senza dedurre una causa di rete.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -263,9 +507,13 @@ Assenza RTP segnalata su una linea e un flow. La soglia prima della segnalazione
 
 ### RTT DTMF KPE — `kpe.audio.dtmf_rtt`
 
-**Unità:** raw. **Tipo:** reported statistic.
+**Unità:** raw · unità non confermata. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità non confermata dal log: nessuna conversione in ms, µs o percentuale. Il nome della metrica non dimostra l’unità.
 
 Statistica KPE denominata dtmf_rtt; semantica dettagliata da confermare col produttore.
+
+**Direzione e contesto:** Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.
 
 **Ambito:** Semantica specifica non confermata. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -275,9 +523,13 @@ Statistica KPE denominata dtmf_rtt; semantica dettagliata da confermare col prod
 
 ### Jitter KPE — `kpe.audio.jitter`
 
-**Unità:** raw. **Tipo:** reported statistic.
+**Unità:** raw · unità non confermata. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità non confermata dal log: nessuna conversione in ms, µs o percentuale. Il nome della metrica non dimostra l’unità.
 
 Statistica del motore denominata jitter.
+
+**Direzione e contesto:** Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.
 
 **Ambito:** Semantica specifica non confermata. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -287,9 +539,13 @@ Statistica del motore denominata jitter.
 
 ### Jitter RFC3550 KPE — `kpe.audio.jitter_rfc3550`
 
-**Unità:** raw. **Tipo:** reported statistic.
+**Unità:** raw · unità non confermata. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità non confermata dal log: nessuna conversione in ms, µs o percentuale. Il nome della metrica non dimostra l’unità.
 
 Statistica del motore etichettata jitter_rfc3550.
+
+**Direzione e contesto:** Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.
 
 **Ambito:** Semantica specifica non confermata. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -299,9 +555,13 @@ Statistica del motore etichettata jitter_rfc3550.
 
 ### Perdita jitter KPE — `kpe.audio.ploss_jitter`
 
-**Unità:** raw. **Tipo:** reported statistic.
+**Unità:** raw · unità non confermata. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità non confermata dal log: nessuna conversione in ms, µs o percentuale. Il nome della metrica non dimostra l’unità.
 
 Statistica del motore denominata ploss_jitter; non equiparata automaticamente alla perdita RTCP.
+
+**Direzione e contesto:** Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.
 
 **Ambito:** Semantica specifica non confermata. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -311,9 +571,13 @@ Statistica del motore denominata ploss_jitter; non equiparata automaticamente al
 
 ### Perdita KPE — `kpe.common.ploss`
 
-**Unità:** raw. **Tipo:** reported statistic.
+**Unità:** raw · unità non confermata. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità non confermata dal log: nessuna conversione in ms, µs o percentuale. Il nome della metrica non dimostra l’unità.
 
 Statistica del motore denominata ploss.
+
+**Direzione e contesto:** Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.
 
 **Ambito:** Semantica specifica non confermata. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -323,9 +587,13 @@ Statistica del motore denominata ploss.
 
 ### RTT KPE — `kpe.common.rtt`
 
-**Unità:** raw. **Tipo:** reported statistic.
+**Unità:** raw · unità non confermata. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità non confermata dal log: nessuna conversione in ms, µs o percentuale. Il nome della metrica non dimostra l’unità.
 
 Statistica del motore denominata rtt.
+
+**Direzione e contesto:** Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.
 
 **Ambito:** Semantica specifica non confermata. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -335,9 +603,13 @@ Statistica del motore denominata rtt.
 
 ### Pacchetti RX KPE — `kpe.common.rtp_pkt_rx`
 
-**Unità:** packets. **Tipo:** reported statistic.
+**Unità:** pacchetti. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: JSON incoming/outgoing → common → rtp_pkt_rx → last/avg/min/max
 
 Conteggio RTP ricevuto dichiarato dal motore.
+
+**Direzione e contesto:** Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.
 
 **Ambito:** Semantica specifica non confermata. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -347,9 +619,13 @@ Conteggio RTP ricevuto dichiarato dal motore.
 
 ### Pacchetti TX KPE — `kpe.common.rtp_pkt_tx`
 
-**Unità:** packets. **Tipo:** reported statistic.
+**Unità:** pacchetti. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: JSON incoming/outgoing → common → rtp_pkt_tx → last/avg/min/max
 
 Conteggio RTP trasmesso dichiarato dal motore.
+
+**Direzione e contesto:** Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.
 
 **Ambito:** Semantica specifica non confermata. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -359,9 +635,13 @@ Conteggio RTP trasmesso dichiarato dal motore.
 
 ### MOS a profilo fisso · sola perdita — `derived.mos_reference`
 
-**Unità:** MOS. **Tipo:** derived step.
+**Unità:** MOS · indice senza unità. **Tipo:** derived step.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Perdita RTCP (%) locale o dichiarata dal peer, oppure perdita da finestre strutturate verificate. Profilo loss-reference-1: G.711 10 ms, PLC Appendix I, Ie=0, Bpl=25.1, BurstR=1, R base=93.2.
 
 Indice stimato a profilo costante per confrontare la perdita nelle due direzioni. R=93.2−95p/(p+25.1), limitato a 0–100; MOS=1+0.035R+0.000007R(R−60)(100−R).
+
+**Direzione e contesto:** Stima sulla perdita del ricevitore locale (incoming) o del peer (outgoing), non qualità misurata.
 
 **Ambito:** Modello di qualità derivato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -371,9 +651,13 @@ Indice stimato a profilo costante per confrontare la perdita nelle due direzioni
 
 ### audio samples skipped so far — `vd.samples_skipped`
 
-**Unità:** samples. **Tipo:** counter.
+**Unità:** campioni audio. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: audio samples skipped so far
 
 Numero cumulativo di campioni audio saltati dal device. Campioni audio e pacchetti RTP sono grandezze diverse.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -383,9 +667,13 @@ Numero cumulativo di campioni audio saltati dal device. Campioni audio e pacchet
 
 ### ring hard max buffer usecs — `vd.buffer_hard_max`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: ring hard max buffer usecs (µs ÷ 1000; originali raw_value/raw_unit)
 
 Limite massimo rigido del ring buffer dichiarato dal device; non occupazione effettiva.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -395,9 +683,13 @@ Limite massimo rigido del ring buffer dichiarato dal device; non occupazione eff
 
 ### ring min buffer usecs — `vd.buffer_min`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: ring min buffer usecs (µs ÷ 1000; originali raw_value/raw_unit)
 
 Limite minimo del ring buffer dichiarato dal device; non minimo misurato sull’intera chiamata.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -407,9 +699,13 @@ Limite minimo del ring buffer dichiarato dal device; non minimo misurato sull’
 
 ### Numero cumulativo di underrun del lettore — `vd.underruns`
 
-**Unità:** count. **Tipo:** counter.
+**Unità:** conteggio. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: number of buffer underruns occurred on this ring for this VOD
 
 Numero cumulativo di underrun del ring per lo specifico VOD lettore e VID collegato. Non è il conteggio complessivo di guasti della chiamata.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -419,9 +715,13 @@ Numero cumulativo di underrun del ring per lo specifico VOD lettore e VID colleg
 
 ### Silenzio riprodotto per underrun, cumulativo — `vd.silence_played`
 
-**Unità:** ms. **Tipo:** counter.
+**Unità:** ms · millisecondi. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: silence msecs played out for buffer underruns occurred on this ring for this VOD
 
 Durata cumulativa del silenzio riprodotto per compensare underrun del ring per lo specifico VOD e VID. Non prova silenzio della sorgente o perdita RTP.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -431,9 +731,13 @@ Durata cumulativa del silenzio riprodotto per compensare underrun del ring per l
 
 ### Total bytes read from source — `vd.bytes_read`
 
-**Unità:** bytes. **Tipo:** counter.
+**Unità:** byte. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Total bytes read from source
 
 Byte cumulativi letti dalla sorgente del device: rete, scheda audio o file secondo la specializzazione osservata. Non automaticamente traffico RTP.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -443,9 +747,13 @@ Byte cumulativi letti dalla sorgente del device: rete, scheda audio o file secon
 
 ### Total bytes sent to decoder — `vd.bytes_decoder`
 
-**Unità:** bytes. **Tipo:** counter.
+**Unità:** byte. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Total bytes sent to decoder
 
 Byte cumulativi inviati al decoder, non necessariamente byte ricevuti sulla rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -455,9 +763,13 @@ Byte cumulativi inviati al decoder, non necessariamente byte ricevuti sulla rete
 
 ### Total packets/chunks sent to decoder — `vd.chunks_decoder`
 
-**Unità:** chunks. **Tipo:** counter.
+**Unità:** chunk. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Total packets/chunks sent to decoder
 
 Pacchetti/chunk cumulativi inviati al decoder. Chunk non equivale automaticamente a datagramma RTP.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -467,45 +779,61 @@ Pacchetti/chunk cumulativi inviati al decoder. Chunk non equivale automaticament
 
 ### Total media read from middleware — `vd.media_read`
 
-**Unità:** ms. **Tipo:** counter.
+**Unità:** ms · millisecondi / raw · unità non confermata. **Tipo:** counter.
+
+**Lettura dell’unità:** ms solo con suffisso esplicito nel campo originale; senza suffisso il valore resta raw. Le due unità non si convertono né si sovrappongono.
 
 Durata cumulativa del media letto dal middleware. Non è tempo CPU, latenza o durata della chiamata. Usare ms solo con suffisso esplicito, altrimenti raw.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Total media read from middleware.
+**Origine e calcolo:** Total media read from middleware: … ms (senza suffisso: raw).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Total media sent out — `vd.media_sent`
 
-**Unità:** ms. **Tipo:** counter.
+**Unità:** ms · millisecondi / raw · unità non confermata. **Tipo:** counter.
+
+**Lettura dell’unità:** ms solo con suffisso esplicito nel campo originale; senza suffisso il valore resta raw. Le due unità non si convertono né si sovrappongono.
 
 Durata cumulativa del media inviato in uscita. Non è tempo CPU, latenza o durata della chiamata. Usare ms solo con suffisso esplicito, altrimenti raw.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Total media sent out.
+**Origine e calcolo:** Total media sent out: … ms (senza suffisso: raw).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Total media sent to middleware — `vd.media_middleware`
 
-**Unità:** ms. **Tipo:** counter.
+**Unità:** ms · millisecondi / raw · unità non confermata. **Tipo:** counter.
+
+**Lettura dell’unità:** ms solo con suffisso esplicito nel campo originale; senza suffisso il valore resta raw. Le due unità non si convertono né si sovrappongono.
 
 Durata cumulativa del media inviato al middleware. Non è tempo CPU, latenza o durata della chiamata. Usare ms solo con suffisso esplicito, altrimenti raw.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Total media sent to middleware.
+**Origine e calcolo:** Total media sent to middleware: … ms (senza suffisso: raw).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Number of device reset for scheduling delay — `vd.scheduling_resets`
 
-**Unità:** count. **Tipo:** counter.
+**Unità:** conteggio. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Number of device reset for scheduling delay
 
 Numero di reset che il device attribuisce a ritardo di scheduling. Non è un conteggio di pacchetti persi o di reset della rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -515,9 +843,13 @@ Numero di reset che il device attribuisce a ritardo di scheduling. Non è un con
 
 ### ALL Pkts received so far — `vd.packets_all`
 
-**Unità:** packets. **Tipo:** counter.
+**Unità:** pacchetti. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: ALL Pkts received so far
 
 Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere separati totale, RTP, RTCP e sequenze GOOD/BAD. GOOD/BAD è una classificazione del motore, non una definizione confermata di perdita o qualità vocale.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -527,9 +859,13 @@ Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere
 
 ### RTP Pkts received so far — `vd.packets_rtp`
 
-**Unità:** packets. **Tipo:** counter.
+**Unità:** pacchetti. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: RTP Pkts received so far
 
 Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere separati totale, RTP, RTCP e sequenze GOOD/BAD. GOOD/BAD è una classificazione del motore, non una definizione confermata di perdita o qualità vocale.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -539,9 +875,13 @@ Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere
 
 ### RTCP Pkts received so far — `vd.packets_rtcp`
 
-**Unità:** packets. **Tipo:** counter.
+**Unità:** pacchetti. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: RTCP Pkts received so far
 
 Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere separati totale, RTP, RTCP e sequenze GOOD/BAD. GOOD/BAD è una classificazione del motore, non una definizione confermata di perdita o qualità vocale.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -551,9 +891,13 @@ Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere
 
 ### RTP GOOD Pkts received so far — `vd.packets_rtp_good`
 
-**Unità:** packets. **Tipo:** counter.
+**Unità:** pacchetti. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: RTP GOOD Pkts received so far
 
 Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere separati totale, RTP, RTCP e sequenze GOOD/BAD. GOOD/BAD è una classificazione del motore, non una definizione confermata di perdita o qualità vocale.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -563,9 +907,13 @@ Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere
 
 ### RTP BAD Pkts received so far — `vd.packets_rtp_bad`
 
-**Unità:** packets. **Tipo:** counter.
+**Unità:** pacchetti. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: RTP BAD Pkts received so far
 
 Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere separati totale, RTP, RTCP e sequenze GOOD/BAD. GOOD/BAD è una classificazione del motore, non una definizione confermata di perdita o qualità vocale.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -575,9 +923,13 @@ Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere
 
 ### Number of Read Errors — `vd.read_errors`
 
-**Unità:** count. **Tipo:** counter.
+**Unità:** conteggio. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Number of Read Errors
 
 Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o decodifica). Numero cumulativo di errori dichiarati. La fase e il device non identificano automaticamente la causa di rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -587,9 +939,13 @@ Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o d
 
 ### Current read error event duration (msecs) — `vd.read_error_duration`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Current read error event duration (msecs)
 
 Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o decodifica). Durata dell’evento di errore corrente, non totale cumulativo. La fase e il device non identificano automaticamente la causa di rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -599,9 +955,13 @@ Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o d
 
 ### Number of Write Errors — `vd.write_errors`
 
-**Unità:** count. **Tipo:** counter.
+**Unità:** conteggio. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Number of Write Errors
 
 Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o decodifica). Numero cumulativo di errori dichiarati. La fase e il device non identificano automaticamente la causa di rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -611,9 +971,13 @@ Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o d
 
 ### Current write error event duration (msecs) — `vd.write_error_duration`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Current write error event duration (msecs)
 
 Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o decodifica). Durata dell’evento di errore corrente, non totale cumulativo. La fase e il device non identificano automaticamente la causa di rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -623,9 +987,13 @@ Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o d
 
 ### Number of Encoding Errors — `vd.encoding_errors`
 
-**Unità:** count. **Tipo:** counter.
+**Unità:** conteggio. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Number of Encoding Errors
 
 Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o decodifica). Numero cumulativo di errori dichiarati. La fase e il device non identificano automaticamente la causa di rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -635,9 +1003,13 @@ Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o d
 
 ### Current encoding error event duration (msecs) — `vd.encoding_error_duration`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Current encoding error event duration (msecs)
 
 Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o decodifica). Durata dell’evento di errore corrente, non totale cumulativo. La fase e il device non identificano automaticamente la causa di rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -647,9 +1019,13 @@ Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o d
 
 ### Number of Decoding Errors — `vd.decoding_errors`
 
-**Unità:** count. **Tipo:** counter.
+**Unità:** conteggio. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Number of Decoding Errors
 
 Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o decodifica). Numero cumulativo di errori dichiarati. La fase e il device non identificano automaticamente la causa di rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -659,9 +1035,13 @@ Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o d
 
 ### Current decoding error event duration (msecs) — `vd.decoding_error_duration`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Current decoding error event duration (msecs)
 
 Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o decodifica). Durata dell’evento di errore corrente, non totale cumulativo. La fase e il device non identificano automaticamente la causa di rete.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -669,11 +1049,15 @@ Errori nella fase indicata dal campo originale (lettura, scrittura, codifica o d
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
-### RTP last streak of GOOD Pkts received — `vd.streak_good`
+### Lunghezza dell’ultima sequenza RTP GOOD — `vd.streak_good`
 
-**Unità:** packets. **Tipo:** gauge.
+**Unità:** pacchetti. **Tipo:** gauge.
 
-Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere separati totale, RTP, RTCP e sequenze GOOD/BAD. GOOD/BAD è una classificazione del motore, non una definizione confermata di perdita o qualità vocale.
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: RTP last streak of GOOD Pkts received
+
+Numero di pacchetti nell’ultima sequenza GOOD dichiarata dal motore. È la lunghezza di una sequenza, non il totale cumulativo dei pacchetti e non una percentuale di perdita. GOOD/BAD non dimostra qualità vocale.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -681,11 +1065,15 @@ Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
-### RTP last streak of BAD Pkts received — `vd.streak_bad`
+### Lunghezza dell’ultima sequenza RTP BAD — `vd.streak_bad`
 
-**Unità:** packets. **Tipo:** gauge.
+**Unità:** pacchetti. **Tipo:** gauge.
 
-Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere separati totale, RTP, RTCP e sequenze GOOD/BAD. GOOD/BAD è una classificazione del motore, non una definizione confermata di perdita o qualità vocale.
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: RTP last streak of BAD Pkts received
+
+Numero di pacchetti nell’ultima sequenza BAD dichiarata dal motore. È la lunghezza di una sequenza, non il totale cumulativo dei pacchetti e non una percentuale di perdita. GOOD/BAD non dimostra qualità vocale.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
@@ -693,257 +1081,357 @@ Conteggio di ricezione dichiarato per la categoria del campo sorgente; mantenere
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
-### Frequenza cumulativa di scrittura — `vd.write_rate`
+### Frequenza di scrittura dichiarata — `vd.write_rate`
 
-**Unità:** samples/s. **Tipo:** gauge.
+**Unità:** campioni audio/s. **Tipo:** gauge.
 
-Frequenza di scrittura riportata dal device in campioni/s. Non è bitrate di rete e non dimostra da sola regolarità dello scheduling.
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Cumulative write rate is … samples per second
+
+Frequenza di scrittura riportata dal device in campioni/s. Non è bitrate di rete e non dimostra da sola regolarità dello scheduling. Il campo si chiama Cumulative write rate, ma il valore è una frequenza (campioni/s), non un contatore da sommare.
+
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
 
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Frequenza cumulativa di scrittura.
+**Origine e calcolo:** Cumulative write rate is … samples per second.
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Ritardo accumulato di scheduling — `vd.scheduling_delay`
 
-**Unità:** ms. **Tipo:** counter.
+**Unità:** ms · millisecondi. **Tipo:** counter.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Accumulated delay is … ms
 
 Ritardo accumulato di scheduling dichiarato dal thread del VD. Descrive la temporizzazione locale, non il tempo di transito RTP.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Ritardo accumulato di scheduling.
+**Origine e calcolo:** Accumulated delay is … ms.
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Durata corrente underrun del lettore — `vd.underrun_duration`
 
-**Unità:** ms. **Tipo:** gauge.
+**Unità:** ms · millisecondi. **Tipo:** gauge.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Currently in underrun for this VOD since … msecs
 
 Durata dichiarata dell’underrun attualmente in corso per il lettore/input osservato; non contatore cumulativo né durata totale della chiamata.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Durata corrente underrun del lettore.
+**Origine e calcolo:** Currently in underrun for this VOD since … msecs.
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Byte letti heartbeat — `vd.heartbeat_bytes_read`
 
-**Unità:** bytes. **Tipo:** reported statistic.
+**Unità:** byte. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: read bytes: … (heartbeat; finestra dei byte non confermata)
 
 Byte letti riportati dal thread nel messaggio heartbeat; finestra dei byte non confermata. Non derivare un bitrate dividendo per la finestra dei cicli.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Byte letti heartbeat.
+**Origine e calcolo:** read bytes: … (heartbeat; finestra dei byte non confermata).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Byte scritti heartbeat — `vd.heartbeat_bytes_written`
 
-**Unità:** bytes. **Tipo:** reported statistic.
+**Unità:** byte. **Tipo:** reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: written bytes … (heartbeat; finestra dei byte non confermata)
 
 Byte scritti riportati dal thread nel messaggio heartbeat; finestra dei byte non confermata. Non derivare un bitrate dividendo per la finestra dei cicli.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Elaborazione e I/O del device. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Byte scritti heartbeat.
+**Origine e calcolo:** written bytes … (heartbeat; finestra dei byte non confermata).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Finestra cicli heartbeat — `vd.heartbeat_window`
 
-**Unità:** ms. **Tipo:** interval.
+**Unità:** ms · millisecondi. **Tipo:** interval.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles (last … ms)
 
 Finestra last ms dichiarata per i conteggi dei cicli heartbeat. Non è ritardo di scheduling né intervallo confermato per i byte.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Finestra cicli heartbeat.
+**Origine e calcolo:** Running cycles (last … ms).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli Tbody Runs — `vd.cycles_tbody_runs`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase tbody_runs; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase tbody_runs. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli Tbody Runs.
+**Origine e calcolo:** Running cycles: conteggio della fase tbody_runs; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli Read — `vd.cycles_read`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase read; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase read. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli Read.
+**Origine e calcolo:** Running cycles: conteggio della fase read; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli Decode — `vd.cycles_decode`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase decode; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase decode. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli Decode.
+**Origine e calcolo:** Running cycles: conteggio della fase decode; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli AdaptToMw — `vd.cycles_adapttomw`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase adapttomw; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase adapttomw. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli AdaptToMw.
+**Origine e calcolo:** Running cycles: conteggio della fase adapttomw; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli Append — `vd.cycles_append`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase append; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase append. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli Append.
+**Origine e calcolo:** Running cycles: conteggio della fase append; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli ReadFromMW — `vd.cycles_readfrommw`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase readfrommw; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase readfrommw. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli ReadFromMW.
+**Origine e calcolo:** Running cycles: conteggio della fase readfrommw; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli AdaptToCodec — `vd.cycles_adapttocodec`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase adapttocodec; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase adapttocodec. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli AdaptToCodec.
+**Origine e calcolo:** Running cycles: conteggio della fase adapttocodec; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli Encode — `vd.cycles_encode`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase encode; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase encode. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli Encode.
+**Origine e calcolo:** Running cycles: conteggio della fase encode; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Cicli Write — `vd.cycles_write`
 
-**Unità:** count. **Tipo:** counter / reported statistic.
+**Unità:** conteggio. **Tipo:** counter / reported statistic.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Running cycles: conteggio della fase write; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio.
 
 Conteggio riportato per la fase write. I cicli del thread non sono cicli CPU né millisecondi. Nei messaggi heartbeat vale la finestra last ms; distinguere il contesto dai cumulativi Running Info.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Scheduling del thread locale. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Running Info / alive and kicking: Cicli Write.
+**Origine e calcolo:** Running cycles: conteggio della fase write; nel heartbeat la finestra è indicata da last … ms, ma il valore dei cicli è un conteggio..
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Il VD opera in un thread: distinguere scheduling locale, I/O e trasporto RTP. Un sintomo non identifica da solo una causa di rete.
 
 ### Pacchetti inviati dal peer, totale — `rtcp.packets_sent_total`
 
-**Unità:** packets. **Tipo:** counter.
+**Unità:** pacchetti. **Tipo:** counter.
 
-Pacchetti inviati dal peer, totale. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi.
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Sender Report - Number of packets sent by this remote peer (total)
+
+Pacchetti inviati dal peer, totale. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi. Il mittente del dato è il peer remoto (Sender Report): pacchetti trasmessi non significa pacchetti ricevuti localmente.
+
+**Direzione e contesto:** Pacchetti inviati dal peer secondo il Sender Report; non prova che siano arrivati localmente.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Campo numerico esplicito Sender/Receiver Report RTCP.
+**Origine e calcolo:** Sender Report - Number of packets sent by this remote peer (total).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Non derivare perdita da contatori senza coorte comune.
 
 ### Pacchetti inviati dal peer, intervallo — `rtcp.packets_sent_interval`
 
-**Unità:** packets. **Tipo:** interval.
+**Unità:** pacchetti. **Tipo:** interval.
 
-Pacchetti inviati dal peer, intervallo. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi.
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Sender Report - Number of packets sent by this remote peer (since last report)
+
+Pacchetti inviati dal peer, intervallo. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi. Il mittente del dato è il peer remoto (Sender Report): pacchetti trasmessi non significa pacchetti ricevuti localmente.
+
+**Direzione e contesto:** Pacchetti inviati dal peer secondo il Sender Report; non prova che siano arrivati localmente.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Campo numerico esplicito Sender/Receiver Report RTCP.
+**Origine e calcolo:** Sender Report - Number of packets sent by this remote peer (since last report).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Non derivare perdita da contatori senza coorte comune.
 
 ### Pacchetti ricevuti, intervallo — `rtcp.packets_received_interval`
 
-**Unità:** packets. **Tipo:** interval.
+**Unità:** pacchetti. **Tipo:** interval.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Packet we received from this source (since last report)
 
 Pacchetti ricevuti, intervallo. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi.
 
+**Direzione e contesto:** Pacchetti ricevuti localmente; non confondere con quelli soltanto dichiarati come inviati dal peer.
+
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Campo numerico esplicito Sender/Receiver Report RTCP.
+**Origine e calcolo:** Packet we received from this source (since last report).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Non derivare perdita da contatori senza coorte comune.
 
 ### Pacchetti persi dal peer, totale — `rtcp.packets_lost_total`
 
-**Unità:** packets. **Tipo:** counter.
+**Unità:** pacchetti. **Tipo:** counter.
 
-Pacchetti persi dal peer, totale. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi.
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Receiver Report - pkt lost by this peer (total)
+
+Pacchetti persi dal peer, totale. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi. Il ricevitore è il peer remoto (Receiver Report): non è un conteggio della perdita osservata localmente.
+
+**Direzione e contesto:** Pacchetti persi nella ricezione del peer secondo il Receiver Report; non perdita della ricezione locale.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Campo numerico esplicito Sender/Receiver Report RTCP.
+**Origine e calcolo:** Receiver Report - pkt lost by this peer (total).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Non derivare perdita da contatori senza coorte comune.
 
 ### Pacchetti persi dal peer, intervallo — `rtcp.packets_lost_interval`
 
-**Unità:** packets. **Tipo:** interval.
+**Unità:** pacchetti. **Tipo:** interval.
 
-Pacchetti persi dal peer, intervallo. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi.
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: Receiver Report - pkt lost by this peer (since last report)
+
+Pacchetti persi dal peer, intervallo. Numeri esponenziali accettati; conteggi finiti negativi o non interi restano invalidi. Il ricevitore è il peer remoto (Receiver Report): non è un conteggio della perdita osservata localmente.
+
+**Direzione e contesto:** Pacchetti persi nella ricezione del peer secondo il Receiver Report; non perdita della ricezione locale.
 
 **Ambito:** Trasporto RTP osservato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Campo numerico esplicito Sender/Receiver Report RTCP.
+**Origine e calcolo:** Receiver Report - pkt lost by this peer (since last report).
 
 **Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Non derivare perdita da contatori senza coorte comune.
 
 ### Incremento silenzio riprodotto per underrun — `derived.silence_played_delta`
 
-**Unità:** ms. **Tipo:** interval.
+**Unità:** ms · millisecondi. **Tipo:** interval.
+
+**Lettura dell’unità:** Millisecondi (ms), non microsecondi: il contatore originale è “silence msecs played out for buffer underruns occurred on this ring for this VOD”. Differenza tra due osservazioni; non ms/s né percentuale. Esempio: 100 → 125 ms produce 25 ms.
 
 Silenzio aggiunto al ring per quello specifico lettore/input tra due osservazioni.
 
+**Direzione e contesto:** Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.
+
 **Ambito:** Buffer e disponibilità del media. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
 
-**Origine e calcolo:** Differenza consecutiva di vd.silence_played nello stesso contesto, massimo 30 s, evidenze dei due campioni..
+**Origine e calcolo:** Differenza tra campioni consecutivi di vd.silence_played, separati per prospettiva, observer, device, output, input, ciclo di vita, direzione, flow e SSRC; massimo 30 s e due eventi di evidenza..
 
-**Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Confrontare con episodi, senza sommare le due misure. Non è occupazione a precisione di un secondo.
+**Limiti:** Osservatore, output, input, device e ciclo di vita restano distinti. Contatori cumulativi: non sommare campioni; a_counter_intervals segnala initial, reset, invalid, conflict e gap oltre 30 s. Un delta non localizza il fenomeno dentro l’intervallo. GOOD/BAD non significa pacchetti persi. Ciclo unknown = nessuna creazione osservata, non continuità dimostrata. Valori finiti invalidi conservati; NaN/N/A mai zero. Confrontare con episodi, senza sommare le due misure. Non è occupazione a precisione di un secondo. La direzione è quella del contesto originale: Default Audio Input → NAWT è elaborazione locale in trasmissione, non ricezione downstream. Il delta non prova silenzio del microfono, perdita RTP o audio effettivamente ascoltato dal peer.
+
+### Perceptual Quality — `derived.perceptual_quality`
+
+**Unità:** PQ · indice 0–100. **Tipo:** interval.
+
+**Lettura dell’unità:** Unità del valore nel grafico e nel CSV; origine: AWT: Buffer underrun event terminated … Event was … msecs long; contatore silence msecs played out for buffer underruns.
+
+100 meno la percentuale di tempo in underrun AWT in finestre di un secondo, allineate all’orologio del log e ritagliate sulla parte attiva della chiamata ai confini. La percentuale usa la durata effettiva della finestra. 100 = nessun underrun ricostruito, 0 = tutta la finestra in underrun.
+
+**Direzione e contesto:** Continuità del percorso locale NART → AWT; sola ricezione locale, nessun report del peer.
+
+**Ambito:** Modello di qualità derivato. Conservare prospettiva, observer, device, output_device, input_device, lifecycle, flow e SSRC ove disponibili. Il campo può riguardare un thread, un device o una relazione VID/VOD: consultare origine e contesto.
+
+**Origine e calcolo:** AWT: Buffer underrun event terminated … Event was … msecs long; contatore silence msecs played out for buffer underruns..
+
+**Limiti:** Indice operativo di continuità audio, non MOS né misura percettiva validata. Inizio/fine osservati; durata dichiarata come fallback. Log AWT assunto completo: fuori dagli episodi vale 100; episodi aperti attivi fino a fine chiamata o ricreazione. Senza chiusura registrata, copertura fino all’ultima evidenza attribuita alla stessa chiamata nella sorgente. Nessuna verifica dei contatori periodici. Durante la chiamata, nessun episodio registrato significa 100 anche senza heartbeat o contatori AWT. Eventuali episodi presenti ma non attribuibili restano ambigui. Posizione associata soltanto al secondo che contiene il suo timestamp; nessuna propagazione spaziale.
 
 ## Stati e metadati periodici
 

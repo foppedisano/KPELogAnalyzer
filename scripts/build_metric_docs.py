@@ -19,7 +19,7 @@ Le schede sotto sono il riferimento tecnico; il metodo MOS completo è in [mos.m
 - **Flow / SSRC / device**: restano distinti; non aggregare flussi o destinatari diversi. Il device selezionato nella diagnostica filtra le metriche VD; RTT mostra separatamente tutti i flow/SSRC attribuiti alla prospettiva.
 - **sample / gauge**: osservazione al timestamp. **event**: aggiornamento esplicito, senza interpolazione. **counter**: contatore cumulativo soggetto a reset. **interval**: valore riferito a un intervallo (delta oppure finestra esplicita). **step**: valore mantenuto fino a una scadenza dichiarata; il MOS legacy usa questa rappresentazione.
 - **last / avg / min / max**: statistiche riportate da KPE, non calcolate dall’analizzatore. Non è nota automaticamente la loro finestra temporale. La media nelle tabelle RTCP è aritmetica sui campioni, non pesata per durata o pacchetti.
-- **Unità**: µs ÷ 1000 = ms; ms ÷ 1000 = s. Il DB conserva le metriche VD in ms, compreso il contatore di silenzio; Diagnostica A/B consente di scegliere ms oppure secondi; il grafico della chiamata mantiene ms. `raw` significa unità non confermata.
+- **Unità**: µs ÷ 1000 = ms; ms ÷ 1000 = s. Le durate VD con unità esplicita sono normalizzate in ms; byte, pacchetti, campioni, chunk e conteggi mantengono le rispettive unità. Solo il silenzio saltato cumulativo può essere visualizzato in secondi in Diagnostica A/B; i delta restano in ms. `raw` significa unità non confermata. Lo stesso nome può avere valori ms e raw: le serie rimangono separate.
 - **Validità**: valori finiti negativi e percentuali fuori 0–100 restano con `valid=0`. Valori mancanti, non numerici, NaN e infinito non diventano zero. La diagnostica esclude i campioni invalidi.
 - **Provenienza**: `metrics.event_id` porta a `events` e al file. `source_line` è la riga precisa del campo per il nuovo estrattore; se nulla usare `events.line_no`, inizio del record. `raw_value/raw_unit` preservano la conversione del nuovo estrattore; possono essere null per metriche precedenti.
 - **Orologio**: timestamp originali invariati, senza fuso dedotto. L’offset della sorgente, in secondi, si somma solo per allineamento nei grafici e derivazioni diagnostiche. Un offset positivo sposta la sorgente in avanti.
@@ -38,9 +38,44 @@ sono disponibili anche tramite API analitiche e MCP.
 ## Schede
 
 '''
-parts=[header.replace("## Schede", markdown()+"## Schede")]
+audit = '''## Verifica delle unità, metrica per metrica
+
+Inventario verificato sui campi riconosciuti da parser.py, enrichment.py e periodic.py,
+sulle finestre di telemetria e sui calcoli derivati. L’unità dei campioni resta
+la fonte per l’asse verticale; una voce di catalogo non converte dati raw.
+Le sei statistiche KPE raw restano non confermate in assenza di evidenza del produttore.
+
+`derived.silence_played_delta` è in **millisecondi (ms)**: il campo di partenza
+contiene **msecs**, non usecs. Esempio: 100 → 125 ms produce un incremento di
+25 ms tra i due campioni, non 25 µs, non 25 ms/s e non una percentuale.
+
+| Metrica | Unità nel grafico / CSV | Campo originale o derivazione |
+|---|---|---|
+'''
+audit += ''.join(f"| `{e['name']}` | {e['unit_label']} | {e['source'].replace('|', '/')} |\n" for e in CATALOG)
+contexts = '''
+## Verifica di direzione e tipo, metrica per metrica
+
+Le metriche di device e i delta conservano il contesto di origine. Un input
+microfono verso NAWT è elaborazione locale in trasmissione; NART è ricezione.
+Un percorso NART → NAWT coinvolge entrambe e non viene forzato in una sola
+direzione. Il solo nome di un osservatore, microfono, speaker o file non prova
+la tratta. Scheduling locale, I/O e fenomeni del buffer non sono misure di
+perdita di rete. Un ruolo xcoder/unknown non diventa automaticamente app.
+
+La selezione può raccogliere più contesti: il menu lo segnala e ogni serie
+mantiene la propria interpretazione. In assenza di ruolo confermato le etichette
+upstream/downstream indicano “app presunta”. La legenda distingue contatori,
+valori istantanei, eventi, incrementi su intervallo e statistiche last/avg/min/max;
+il valore tecnico statistic=sample resta compatibile nelle API.
+
+| Metrica | Tipo dichiarato | Regola di direzione / origine della misura |
+|---|---|---|
+'''
+contexts += ''.join(f"| `{e['name']}` | {e['kind']} | {e['orientation']['description']} |\n" for e in CATALOG)
+parts=[header.replace("## Schede", markdown()+audit+contexts+"\n## Schede")]
 for e in CATALOG:
- parts.append(f"### {e['title']} — `{e['name']}`\n\n**Unità:** {e['unit']}. **Tipo:** {e['kind']}.\n\n{e['meaning'].strip()}\n\n**Ambito:** {e['semantics']['domain_label']}. {e['semantics']['scope']}\n\n**Origine e calcolo:** {e['source']}.\n\n**Limiti:** {e['limits']}\n\n")
+ parts.append(f"### {e['title']} — `{e['name']}`\n\n**Unità:** {e['unit_label']}. **Tipo:** {e['kind']}.\n\n**Lettura dell’unità:** {e['unit_note']}\n\n{e['meaning'].strip()}\n\n**Direzione e contesto:** {e['orientation']['description']}\n\n**Ambito:** {e['semantics']['domain_label']}. {e['semantics']['scope']}\n\n**Origine e calcolo:** {e['source']}.\n\n**Limiti:** {e['limits']}\n\n")
 parts.append('## Stati e metadati periodici\n\n'+''.join(f"- `{m['name']}` ({m['type']}): {m['meaning']}\n" for m in PERIODIC_METADATA)+'\n')
 parts.append('''## Lettura del grafico e dei momenti critici
 

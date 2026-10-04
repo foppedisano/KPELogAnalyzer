@@ -8,6 +8,12 @@ const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../app/static/call-chart.js'), 'utf8'), sandbox);
 
+test('Perceptual Quality keeps the full zero to one hundred axis', () => {
+  const scale = sandbox.chartScale([60, 80, 100], 'PQ');
+  assert.equal(scale.low, 0);
+  assert.equal(scale.high, 100);
+});
+
 test('packet axes cover zero, small, large and anomalous negative counts with integral ticks', () => {
   for (const values of [[], [0], [1], [4], [44], [123456], [-3, 4]]) {
     const scale = sandbox.chartScale(values, 'packets');
@@ -33,4 +39,23 @@ test('normal MOS uses the full meaningful 1–5 scale; anomalies stay visible', 
   assert.equal(scale.high, 5);
   const anomalous = sandbox.chartScale([-2, 8], 'MOS');
   assert.ok(anomalous.low <= -2 && anomalous.high >= 8);
+});
+
+test('same metric and context in raw and ms stay in different series and panels', () => {
+  const point = {name: 'vd.media_read', unit: 'ms', value: 12, perspective_id: 1};
+  const raw = {...point, unit: 'raw', value: 12000};
+  assert.notEqual(sandbox.chartSeriesKey(point), sandbox.chartSeriesKey(raw));
+  assert.notEqual(sandbox.chartUnitKey(point), sandbox.chartUnitKey(raw));
+  assert.notEqual(sandbox.chartUnitKey(raw), sandbox.chartUnitKey({...raw, name: 'kpe.audio.jitter'}));
+  assert.equal(sandbox.chartUnitKey(point), sandbox.chartUnitKey({...point, name: 'rtcp.rtt'}));
+  assert.notEqual(sandbox.chartUnitKey({...point, unit: ''}), sandbox.chartUnitKey(point));
+});
+
+test('axis labels use catalog units and never guess milliseconds for missing units', () => {
+  sandbox.registerMetricUnits([{unit_labels: {ms: 'ms · millisecondi', 'samples/s': 'campioni audio/s'}}]);
+  assert.equal(sandbox.metricUnitLabel('ms'), 'ms · millisecondi');
+  assert.equal(sandbox.metricUnitLabel('samples/s'), 'campioni audio/s');
+  assert.match(sandbox.metricUnitLabel('raw'), /non confermata/);
+  assert.match(sandbox.metricUnitLabel(''), /non dichiarata/);
+  assert.match(sandbox.metricUnitLabel('unknown'), /non documentata/);
 });

@@ -93,3 +93,21 @@ devono essere importati come log set separati.
 Sessione, partecipante, ruolo, nodo e nota persistono nel database. Il confronto
 multicomponente esporta dati, evidenze e configurazione JSON; selezione dei device,
 periodo, zoom e stili non hanno ancora il salvataggio/riapertura delle analisi A/B.
+
+
+## PQ-001 — Assunzioni e copertura
+
+PQ assume completo il logging degli underrun AWT: nessun episodio durante la
+chiamata significa 100 anche senza heartbeat. Non rileva automaticamente il
+raro caso di AWT non avviato. Finestre ambigue per più lettori, chiamate o celle
+restano senza valore. La media geografica descrive i campioni localizzati,
+non tutto il tempo trascorso nella zona; non è un MOS validato.
+
+## GEO-002 — Posizioni periodiche e percorso
+
+Il recupero iOS degli header locali è implementato anche per gli import storici.
+L’età del fix non è verificata; le nuove posizioni alimentano PQ e percorso,
+non il MOS geografico persistito. Le linee del percorso sono indicative e si
+interrompono oltre 30 s: con raccolta al minuto possono restare punti separati.
+Non sono implementati interpolazione del percorso, map matching o attribuzione
+spaziale dei secondi senza coordinate. [Metodo](perceptual-quality.md).

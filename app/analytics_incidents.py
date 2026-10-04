@@ -15,7 +15,9 @@ TABLES={
  'a_incident_window_members': ('Evidence bridge: series_key/window_index to incident_id; includes uncertain open episodes touching a bin.',
    'series_key TEXT,window_index INTEGER,incident_id INTEGER'),
  'a_incident_coverage': ('One selected perspective, including those without attributable episodes; absence is not proof of healthy audio.',
-   'perspective_id INTEGER,call_id INTEGER,line_id INTEGER,episode_count INTEGER,warning TEXT'),
+   'perspective_id INTEGER,call_id INTEGER,line_id INTEGER,episode_count INTEGER,warning TEXT,reader_samples INTEGER,evaluability TEXT'),
+ 'a_incident_call_summary': ('Per call/perspective/observer/input summary without fixed bins. Request incident_summary for archives larger than 100 perspectives. Closed and unresolved episodes remain distinct; zero is not proof of continuous healthy audio.',
+   'call_id INTEGER,perspective_id INTEGER,platform TEXT,observer TEXT,device TEXT,kind TEXT,episode_count INTEGER,closed_episodes INTEGER,unresolved_episodes INTEGER,known_union_ms REAL,series_key TEXT'),
 }
 
 
@@ -49,19 +51,27 @@ def placement(e,policy):
 
 def populate(db,config):
     ps=[dict(r) for r in db.execute('SELECT * FROM a_observations')]
-    if len(ps)>100:raise ValueError('Episodi: massimo 100 prospettive; selezionare call_ids nello scope')
+    summary_only='incidents' not in config['datasets']
+    if not summary_only and len(ps)>100:raise ValueError('Episodi: massimo 100 prospettive per finestre; usare incident_summary per il riepilogo archivio')
+    if len(ps)>2000:raise ValueError('Riepilogo episodi: massimo 2.000 prospettive')
     width=round(config['incident_window_seconds']*1000000)
     policy=config['incident_time_basis'];groups=defaultdict(list);counter=0
     lower=us(epoch(config['scope']['start'])) if config['scope']['start'] else None
     upper=us(epoch(config['scope']['end'])) if config['scope']['end'] else None
     for p in ps:
         audio=incidents(db,p['id'])
-        db.execute('INSERT INTO a_incident_coverage VALUES(?,?,?,?,?)',(p['id'],p['call_id'],p['line_id'],len(audio['episodes']),audio['warning']))
+        reader_samples=db.execute("SELECT COUNT(*) FROM metrics WHERE perspective_id=? AND (observer LIKE 'AWT%' OR observer LIKE 'NAWT%')",(p['id'],)).fetchone()[0]
+        db.execute('INSERT INTO a_incident_coverage VALUES(?,?,?,?,?,?,?)',(p['id'],p['call_id'],p['line_id'],len(audio['episodes']),audio['warning'],reader_samples,'reader_evidence_present_not_continuous' if reader_samples or audio['episodes'] else 'no_recognized_reader_evidence'))
+        totals=defaultdict(list)
         for e in audio['episodes']:
             counter+=1
             if counter>100000:raise ValueError('Troppi episodi: restringere le chiamate')
             key=hashlib.sha256(str((p['id'],e['stream'])).encode()).hexdigest()[:24]
             a,b,basis=placement(e,policy)
+            left=a if a is not None else us(e['start'])
+            right=b if b is not None else us(e['end'] if e['end'] is not None else e['last_observed'])
+            if (lower is None or right>=lower) and (upper is None or left<upper):
+                totals[(e['observer'],e['device'],e['kind'],key)].append((e,a,b))
             db.execute('INSERT INTO a_incidents VALUES('+','.join('?' for _ in range(23))+')',
                 (counter,key,p['call_id'],p['id'],p['import_id'],e['kind'],e['observer'],e['device'],e['flow'],
                  stamp(us(e['start'])),stamp(us(e['end'])) if e['end'] is not None else None,
@@ -70,6 +80,17 @@ def populate(db,config):
             db.executemany('INSERT INTO a_incident_evidence VALUES(?,?,?,?)',
                 ((counter,r['event_id'],r['filename'],r['line']) for r in e['evidence']))
             if e['kind']=='buffer_underrun':groups[(p['id'],key)].append((counter,e,a,b))
+        for (observer,device,kind,key),items in totals.items():
+            spans=[]
+            for e,a,b in items:
+                if a is not None and b is not None:
+                    a=max(a,lower) if lower is not None else a
+                    b=min(b,upper) if upper is not None else b
+                    if b>a:spans.append((a,b))
+            db.execute('INSERT INTO a_incident_call_summary VALUES(?,?,?,?,?,?,?,?,?,?,?)',(p['call_id'],p['id'],p['platform'],observer,device,kind,len(items),sum(e['status']=='closed' for e,_,_ in items),sum(e['status']!='closed' for e,_,_ in items),union_length(spans)/1000,key))
+        if not totals:
+            db.execute('INSERT INTO a_incident_call_summary VALUES(?,?,?,?,?,?,?,?,?,?,?)',(p['call_id'],p['id'],p['platform'],None,None,None,0,0,0,None,None))
+    if summary_only:return
     by_id={p['id']:p for p in ps};n=0;members=0
     for (pid,key),items in groups.items():
         p=by_id[pid];anchor=us(epoch(p['connected'] or p['start']))

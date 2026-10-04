@@ -219,3 +219,20 @@ idempotente. Gli indici per evento e prospettiva rendono il recupero e i grafici
 praticabili sul database storico. `periodic-1:<import>` marca il completamento;
 la transazione comprende osservazioni e marker. ID e annotazioni preesistenti
 rimangono invariati. I marker di arricchimento precedenti non sono incrementati.
+
+
+## Checkpoint PQ, percorsi e transitori
+
+`perceptual.py` calcola PQ in lettura dalle prove AWT e dai confini della
+prospettiva; `perceptual_geo.py` associa soltanto il secondo contenente ogni
+posizione. `call_route.py` conserva percorsi e prove separati per sorgente.
+`ios_positions.py`, invocato prima del controllo del vecchio marker geografico,
+aggiunge le posizioni `sip_config` con marker indipendente e idempotente, senza
+cambiare schema o ID precedenti. L’inizializzazione visita anche gli import
+storici; la normale importazione esegue lo stesso estrattore atomicamente.
+Le nuove posizioni non ricalcolano le derivazioni MOS persistite.
+
+`transients.py` riconosce notifiche e operazioni con valori autorizzati;
+`analytics_transients.py` prepara confronti temporali temporanei, mantenendo
+serie, lifecycle, evidenze e denominatori. Non introduce attribuzioni causali.
+[Stato consolidato e aggiornamento](checkpoint-2026-10-04.md).

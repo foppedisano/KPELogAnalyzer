@@ -10,9 +10,21 @@ in millisecondi. Unità diverse hanno pannelli con tempo, zoom e cursore comuni.
 Le metriche raw hanno pannelli separati perché la loro unità non è documentata.
 Sorgenti, flussi, device e SSRC mantengono serie distinte.
 
+Ogni asse verticale riporta l’unità estesa: **ms · millisecondi**, percentuale,
+pacchetti, byte, conteggio, campioni audio, campioni audio/s, chunk oppure MOS
+(indice senza unità). Se non è confermata compare **raw · unità non confermata**.
+L’unità è visibile anche nella selezione, nelle etichette e nella legenda.
+Campioni dello stesso parametro con unità diverse restano in serie e pannelli
+separati, anche nelle statistiche. La guida riporta il controllo di ogni metrica
+e il campo originale che ne dichiara l’unità.
+
+**Incremento silenzio riprodotto** (`derived.silence_played_delta`) è in **ms**:
+il contatore di origine dichiara `msecs`. La differenza 100 → 125 ms produce
+25 ms nell’intervallo osservato; non è un tasso al secondo né una percentuale.
+
 La rotella normale scorre la pagina, anche sopra il grafico. **Ctrl + rotella**
 ingrandisce intorno al puntatore. I pulsanti **− / +** cambiano lo zoom al centro
-della finestra; **Mostra tutta la chiamata** torna alla copertura completa.
+della finestra; **Reset zoom** torna alla copertura completa.
 Tutti i pannelli mantengono lo stesso intervallo temporale. L'allineamento assoluto usa le correzioni delle sorgenti,
 quello relativo usa l'inizio della prospettiva, come nel confronto preesistente.
 Le linee si interrompono oltre 30 secondi senza dati. Gli eventi sono punti

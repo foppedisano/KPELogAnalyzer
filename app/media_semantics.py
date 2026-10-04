@@ -45,13 +45,47 @@ DOMAINS = {
     'unspecified':'Semantica specifica non confermata',
 }
 
+ORIENTATIONS = {
+    'awt_quality': 'Continuità del percorso locale NART → AWT; sola ricezione locale, nessun report del peer.',
+    'roundtrip': 'Andata e ritorno RTP/RTCP; non assegnare upstream o downstream.',
+    'probe': 'Sonda ICMP verso la destinazione osservata; non identifica automaticamente il peer RTP.',
+    'combined': 'Indicatore dei due device scelti A+B; non una direzione né una latenza end-to-end.',
+    'receiver_report': 'Incoming: ricezione locale; outgoing: ricezione dichiarata dal peer. Il verso del report non è il verso del media misurato.',
+    'model': 'Stima sulla perdita del ricevitore locale (incoming) o del peer (outgoing), non qualità misurata.',
+    'verified_loss': 'Perdita su intervallo verificato del ricevitore locale (incoming) o del peer (outgoing).',
+    'local_packets': 'Pacchetti ricevuti localmente; non confondere con quelli soltanto dichiarati come inviati dal peer.',
+    'peer_sent': 'Pacchetti inviati dal peer secondo il Sender Report; non prova che siano arrivati localmente.',
+    'peer_lost': 'Pacchetti persi nella ricezione del peer secondo il Receiver Report; non perdita della ricezione locale.',
+    'rtp_receive': 'Ricezione RTP locale NART/flow; preservare device e flusso senza dedurre una causa di rete.',
+    'device': 'Misura locale del device o della relazione VID/VOD. NART: ricezione; input verso NAWT: trasmissione. Device generico, solo microfono/speaker o contesto misto: non assegnare automaticamente downstream.',
+    'unconfirmed': 'Semantica specifica non confermata: il nome e la direzione del JSON non bastano per assegnare upstream/downstream.',
+}
+
+
+def metric_orientation(name):
+    if name == 'derived.perceptual_quality': rule = 'awt_quality'
+    elif name == 'rtcp.rtt': rule = 'roundtrip'
+    elif name == 'network.ping': rule = 'probe'
+    elif name in ('derived.buffer_sum', 'derived.dejitter_sum'): rule = 'combined'
+    elif name in ('rtcp.jitter', 'rtcp.loss'): rule = 'receiver_report'
+    elif name == 'derived.mos_reference': rule = 'model'
+    elif name == 'telemetry.network_loss': rule = 'verified_loss'
+    elif name in ('rtcp.packets_received', 'rtcp.packets_received_interval'): rule = 'local_packets'
+    elif name in ('rtcp.packets_sent_total', 'rtcp.packets_sent_interval'): rule = 'peer_sent'
+    elif name in ('rtcp.packets_lost_total', 'rtcp.packets_lost_interval'): rule = 'peer_lost'
+    elif name in ('vd.missing_packets', 'vd.max_arrival_delay', 'incident.media_missing'): rule = 'rtp_receive'
+    elif name.startswith('vd.') or name in ('derived.silence_delta', 'derived.silence_played_delta', 'incident.buffer_underrun'): rule = 'device'
+    else: rule = 'unconfirmed'
+    return dict(rule=rule, description=ORIENTATIONS[rule])
+
+
 def metric_semantics(name):
     key=name.removeprefix('vd.')
     if 'scheduling' in key or key.startswith('cycles_') or key=='heartbeat_window':
         domain='scheduling'
     elif name.startswith('rtcp.') or key.startswith(('packets_','streak_')) or key in ('missing_packets','max_arrival_delay') or name=='telemetry.network_loss' or name=='incident.media_missing':
         domain='rtp_transport'
-    elif name.startswith('mos.') or name=='derived.mos_reference':
+    elif name.startswith('mos.') or name in ('derived.mos_reference','derived.perceptual_quality'):
         domain='quality_model'
     elif name=='network.ping':
         domain='network_probe'

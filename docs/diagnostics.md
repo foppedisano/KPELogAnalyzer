@@ -98,6 +98,10 @@ su richiesta, senza migrazione o reimportazione:
   reset e intervallo oltre 30 s non producono punti. Le rotazioni di file non
   interrompono il calcolo; fonti diverse non vengono mescolate. Il punto è al
   timestamp del secondo campione ed è isolato, non una curva continua.
+- `derived.silence_played_delta`: incremento del silenzio riprodotto per
+  underrun, in **millisecondi (ms)**. Il campo originale di `vd.silence_played`
+  dichiara `msecs`; non viene diviso per 1000. Il delta resta in ms anche quando
+  il diverso contatore `vd.silence_skipped` è visualizzato in secondi.
 - `incident.buffer_underrun` e `incident.media_missing`: durata degli episodi
   come punti alla segnalazione, più tabella con stato, durata ed evidenze.
   I valori minimi restano etichettati come tali; le durate ignote restano in
@@ -116,6 +120,11 @@ Per il grafico multimetriche della chiamata, con un pannello per unità e
 zoom/cursore comuni, vedi [la guida dedicata](call-chart.md). Diagnostica A/B
 mantiene i suoi controlli e le configurazioni salvabili.
 
+Gli assi verticali riportano l’unità estesa anche in Diagnostica A/B e App e
+xcoder. Le unità sono indicate inoltre nelle legende e nella guida di ciascuna
+metrica. La [verifica delle unità](metrics.md#verifica-delle-unità-metrica-per-metrica)
+elenca ogni parametro e la sua evidenza. I valori raw non sono durate confermate.
+
 ## Missing packets
 
 `vd.missing_packets` è disponibile in chiamata singola, Confronta, Diagnostica A/B e App e xcoder. Mostra un punto isolato per messaggio NART con il conteggio esplicito `(N missing packets)`, asse in pacchetti separato da ms e percentuali, con tacche intere in chiamata/Confronta e Diagnostica A/B. Il tooltip/CSV conserva file e riga del messaggio con i numeri di sequenza. Non è una misura di perdita definitiva: le segnalazioni possono sovrapporsi o precedere recupero/riordino. Nessun totale di pacchetti unici persi viene dedotto.
@@ -129,6 +138,23 @@ Il pannello Aggiungi metriche della chiamata/Confronta raggruppa le metriche in 
 In Diagnostica A/B e App e xcoder, legenda e tooltip indicano chi misura; il filtro Direzione delle curve limita curve e relativo tooltip. Gli episodi audio restano visibili come contesto separato. Il filtro è temporaneo e non modifica le metriche selezionate nelle analisi salvate né il JSON completo esportato.
 
 Una sorgente senza ruolo dichiarato è trattata come app presunta, esplicitamente segnalata nell’interfaccia e con role_basis=app_assumed nell’API. Con ruolo app confermato la classificazione è confermata. Con ruolo xcoder/unknown (o confronti misti) il menu usa Ricezione locale / Ricezione del peer, senza assegnare upstream/downstream finché non è verificato il flusso della tratta app–xcoder. Il ruolo xcoder da solo non prova la tratta: il suo incoming può essere upstream dell’app oppure arrivare da un altro nodo. Il peer RTP può essere il GW, non il telefono dell’interlocutore. Questi indicatori distinguono le condizioni delle direzioni ma non localizzano da soli il guasto nella rete d’accesso.
+
+Per le metriche di device la classificazione usa il device misurato e la
+relazione input/output, anche nei delta. `Default Audio Input → NAWT` descrive
+elaborazione locale in trasmissione; NART descrive il percorso di ricezione.
+Un percorso `NART → NAWT` resta esplicitamente misto. Un device generico, solo
+microfono/speaker o il nome dell’osservatore non dimostra downstream. In caso
+di contesti diversi il menu segnala **Contesti multipli** e la legenda distingue
+le serie; anche i picchi diagnostici conservano il device.
+
+I pacchetti inviati dal peer (Sender Report) non sono pacchetti ricevuti
+localmente; le perdite dichiarate dal peer (Receiver Report) riguardano la sua
+ricezione. Il RTT KPE resta una statistica non confermata; il RTT RTCP e il ping
+ICMP mantengono ambiti distinti. MOS è indicato come stima sulla perdita.
+
+La legenda mostra **contatore cumulativo**, **valore istantaneo**, **evento** o
+**incremento / valore su intervallo**, invece di usare `sample` per tutti.
+Le statistiche last/avg/min/max rimangono quelle riportate dal motore.
 
 ## MOS e ricezione
 

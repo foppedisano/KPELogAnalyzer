@@ -35,6 +35,9 @@ def signal(event, selected_device, line_id):
         return None
     headers = re.findall(r'\[([^\]]+)\]', text)
     observer = headers[1] if len(headers)>1 else 'Sconosciuto'
+    observer_line = re.search(r'of Line (\d+)', observer, re.I)
+    if observer_line and int(observer_line[1]) != line_id:
+        return None
     phase = 'start' if 'Buffer underrun occurred' in text else 'end' if 'Buffer underrun event terminated' in text else 'ongoing' if 'Still in buffer underrun' in text else None
     if not phase:
         return None
@@ -112,21 +115,39 @@ def incidents(db, perspective_id, device=None, offset=0, start=None, end=None):
     cursor=db.execute('''SELECT e.id,e.ts,e.text,e.line_no,e.call_id,f.name filename FROM events e JOIN files f ON f.id=e.file_id
         WHERE e.import_id=? AND e.ts>=? '''+upper+''' AND (e.call_id=? OR e.call_id IS NULL)
         AND ((e.text LIKE '%underrun%' AND e.text LIKE '%input device%')
-        OR e.text LIKE '%reported that%flow%') ORDER BY e.ts,e.id LIMIT 100001''',args)
-    signals=[];count=0
+        OR e.text LIKE '%reported that%flow%' OR e.text LIKE '%Creating device%') ORDER BY e.ts,e.id LIMIT 100001''',args)
+    signals=[];count=0;lifecycles={}
     for row in cursor:
         count+=1
         if count>100000: raise ValueError('Troppi eventi audio nella chiamata: massimo 100.000')
         # Never borrow events explicitly assigned to another call; line scope also checked in signal().
         if row['call_id'] is not None and row['call_id'] != p['call_id']: continue
+        created=re.search(r'Creating device\s+(.*?)\s*$',row['text'].split('\n',1)[0])
+        if created:
+            lifecycles[created[1]]=str(row['id'])
+            continue
         selected=device
         if selected is None:
             # Discover named receiving devices from lifecycle evidence, not
             # only periodic metrics. AWT is an observer, not an input device.
             source=re.search(r'input device\s+(NART\d+ of Line \d+)\s*\.(?:\s|$)',row['text'].split('\n',1)[0],re.I)
             selected=source[1] if source else 'NART0 of Line '+str(p['line_id'])
+            # Sending episodes have Default Audio Input; require the NAWT's
+            # explicit line and a unique same-import lifecycle, never time alone.
+            header=row['text'].split('\n',1)[0]
+            writer=re.search(r'\[NAWT\d+ of Line (\d+)\]',header)
+            if writer and int(writer[1])==p['line_id']:
+                source=re.search(r'input device\s+(Default Audio Input)\s*\.(?:\s|$)',header)
+                if source:
+                    overlap=db.execute('SELECT COUNT(*) FROM perspectives WHERE import_id=? AND line_id=? AND start<=? AND (end IS NULL OR end>=?)',(p['import_id'],p['line_id'],row['ts'],row['ts'])).fetchone()[0]
+                    if overlap!=1: continue
+                    selected=source[1]
         s=signal(dict(row),selected,p['line_id'])
-        if s: signals.append(s)
+        if s:
+            output=s['observer'].removeprefix('AWT - ')
+            if output=='AWT':output='Default Audio Output'
+            s['key']=s['key']+(lifecycles.get(output,'unknown'),lifecycles.get(s['device'],'unknown'))
+            signals.append(s)
     out=[]
     for episode in reconstruct(signals):
         for key in ('start','end','last_observed','detected_at'):

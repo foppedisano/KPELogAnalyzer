@@ -226,7 +226,13 @@ async function detail(id) {
       : "Aggiungi al confronto";
   };
   $("#open-mos").onclick = safe(() => { window.mosLocal = ps[0]?.id; return setView("mos"); });
+  const detailToken=renderToken;
   await mountChart($("#chart-panel"), [id], "derived.mos_reference|incoming");
+  if(detailToken!==renderToken || !$("#detail-events"))return;
+  const routePanel=document.createElement('section');routePanel.id='call-route-panel';routePanel.className='call-route-panel';
+  $("#chart-panel").after(routePanel);
+  await renderGeography(routePanel,detailToken,id);
+  if(detailToken!==renderToken)return;
   await mountAnalysis($("#analysis-panel"), id);
   await mountEvents($("#detail-events"), { call: id }, true);
 }
@@ -478,6 +484,9 @@ function showUpload() {
   $("#upload-dialog").showModal();
 }
 function chooseFiles(files) {
+  if ($("#upload-submit").disabled) return;
+  $("#upload-meters").hidden = true;
+  $("#upload-progress").textContent = "";
   uploadFiles = [...files];
   $("#upload-files").textContent = uploadFiles
     .map((f) => `${f.name} (${number(f.size / 1048576)} MiB)`)
@@ -485,6 +494,9 @@ function chooseFiles(files) {
 }
 $("#upload-top").onclick = showUpload;
 $("#upload-cancel").onclick = () => $("#upload-dialog").close();
+$("#upload-dialog").oncancel = (e) => {
+  if ($("#upload-submit").disabled) e.preventDefault();
+};
 $("#dropzone").onclick = () => $("#file-input").click();
 $("#dropzone").onkeydown = (e) => {
   if (e.key === "Enter" || e.key === " ") {
@@ -498,36 +510,69 @@ $("#dropzone").ondrop = (e) => {
   e.preventDefault();
   chooseFiles(e.dataTransfer.files);
 };
+function uploadZip(file, label, prefix) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const meter = $("#upload-current");
+    const status = $("#upload-progress");
+    meter.value = 0;
+    status.textContent = `${prefix}: trasferimento 0%`;
+    xhr.open("POST", "/api/imports");
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
+    xhr.setRequestHeader("X-Label", encodeURIComponent(label));
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        meter.value = Math.floor(event.loaded / event.total * 100);
+        status.textContent = `${prefix}: trasferimento ${meter.value}%`;
+      } else {
+        meter.removeAttribute("value");
+      }
+    };
+    xhr.upload.onload = () => {
+      meter.removeAttribute("value");
+      status.textContent = `${prefix}: analisi e salvataggio in corso…`;
+    };
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status < 200 || xhr.status >= 300)
+          throw Error(data.error || "Errore del servizio");
+        resolve(data);
+      } catch (err) { reject(err); }
+    };
+    xhr.onerror = () => reject(Error("Connessione interrotta. Verifica il servizio prima di riprovare."));
+    xhr.onabort = () => reject(Error("Trasferimento interrotto"));
+    xhr.send(file);
+  });
+}
 $("#upload-form").onsubmit = safe(async (e) => {
   e.preventDefault();
+  if ($("#upload-submit").disabled) return;
   if (!uploadFiles.length) throw Error("Seleziona almeno uno ZIP");
+  const files = [...uploadFiles];
+  const label = $("#upload-label").value;
   const button = $("#upload-submit");
   button.disabled = true;
   $("#upload-cancel").disabled = true;
+  $("#upload-label").disabled = true;
+  $("#file-input").disabled = true;
+  $("#dropzone").setAttribute("aria-disabled", "true");
+  $("#upload-meters").hidden = false;
+  $("#upload-total").max = files.length;
+  $("#upload-total").value = 0;
+  $("#upload-count").textContent = `0/${files.length}`;
   let failed = 0;
   try {
-    for (let i = 0; i < uploadFiles.length; i++) {
-      const file = uploadFiles[i];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       $("#upload-progress").textContent =
         `Importazione ${i + 1}/${uploadFiles.length}: ${file.name}…`;
       try {
         if (file.size > 64 * 1048576) throw Error("ZIP oltre 64 MiB");
-        const label = $("#upload-label").value;
-        const result = await api("imports", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/octet-stream",
-            "X-Filename": encodeURIComponent(file.name),
-            "X-Label": encodeURIComponent(
-              label
-                ? uploadFiles.length > 1
-                  ? label + " · " + file.name
-                  : label
-                : file.name,
-            ),
-          },
-          body: file,
-        });
+        const result = await uploadZip(file,
+          label ? (files.length > 1 ? label + " · " + file.name : label) : file.name,
+          `ZIP ${i + 1}/${files.length} · ${file.name}`);
         notice(
           result.duplicate
             ? `${file.name}: già importato; nessun duplicato creato.`
@@ -536,8 +581,13 @@ $("#upload-form").onsubmit = safe(async (e) => {
       } catch (err) {
         failed++;
         notice(`${file.name}: ${err.message}`, true);
+      } finally {
+        $("#upload-current").value = 100;
+        $("#upload-total").value = i + 1;
+        $("#upload-count").textContent = `${i + 1}/${files.length} · ${failed} errori`;
       }
     }
+    $("#upload-progress").textContent = "Aggiornamento del registro chiamate…";
     await refresh();
     await setView("calls");
     $("#upload-progress").textContent = failed
@@ -545,11 +595,16 @@ $("#upload-form").onsubmit = safe(async (e) => {
       : "Importazione completata.";
     if (!failed) {
       $("#upload-dialog").close();
-      chooseFiles([]);
+      uploadFiles = [];
+      $("#file-input").value = "";
+      $("#upload-files").textContent = "";
     }
   } finally {
     button.disabled = false;
     $("#upload-cancel").disabled = false;
+    $("#upload-label").disabled = false;
+    $("#file-input").disabled = false;
+    $("#dropzone").removeAttribute("aria-disabled");
   }
 });
 $$("nav button").forEach(

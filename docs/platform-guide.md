@@ -82,7 +82,9 @@ quella del singolo campo numerico estratto.
 5. Se hai i log del ricevitore opposto, selezionalo in **MOS e ricezione**;
    per buffer e analisi salvabili usa **Diagnostica A/B**.
 6. Passa alla **Mappa qualità** solo se esistono posizioni associabili. Controlla
-   tempo osservato, giorni e accuratezza prima di confrontare le zone.
+   origine diretta (pieno) o stimata (trasparente/tratteggio), secondi, giorni,
+   passaggi e disturbi. Disattiva **Mostra zone stimate** per vedere solo i dati
+   diretti. Per seguire il tragitto apri invece **Percorso e qualità** nella chiamata.
 
 `completed` descrive il ciclo della chiamata, non la bontà dell'audio. Un MOS alto
 con ritardo elevato o buffer underrun richiede comunque attenzione.
@@ -107,11 +109,14 @@ appartenenti a flussi o ricevitori diversi senza una regola esplicita.
 
 ## Mappa e futuro predittivo
 
-La mappa interseca gli intervalli di posizione e MOS con il periodo scelto,
-poi aggrega nelle celle. Cambiare cella o periodo non cancella le osservazioni.
-Una zona vuota significa che non c'è copertura utilizzabile, anche se proprio
-lì la connessione era assente. La risposta aggregata non espone identità;
-il database locale conserva la provenienza per verificare le elaborazioni.
+Con MOS la mappa interseca gli intervalli di posizione e qualità con il periodo.
+Con PQ le celle dirette usano i secondi dei messaggi di posizione; quelle stimate
+usano i secondi intermedi lungo percorsi lineari entro 120 s. Dove c'è un dato
+diretto, prevale sempre. Non si propaga la qualità a zone vicine mai attraversate.
+Cambiare cella o periodo non cancella le osservazioni. Una zona vuota significa
+assenza di copertura utilizzabile, anche se lì la connessione era assente.
+Il dettaglio PQ espone riferimenti file/riga/evento: non considerare la risposta
+anonimizzata, anche quando i nomi dei partecipanti non sono visualizzati.
 
 La raccolta strutturata prepara posizione, velocità, rete, configurazioni e
 azioni per algoritmi futuri. **Non esistono ancora previsione del percorso,

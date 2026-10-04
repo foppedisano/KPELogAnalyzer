@@ -42,7 +42,7 @@ La telemetria strutturata non è ancora una fonte di questa metrica AWT legacy.
 
 Si prende solo il secondo che **contiene il timestamp della posizione** nella
 stessa sorgente e in una chiamata attiva univoca. Nessun mantenimento della
-posizione per 120 s e nessuna interpolazione del percorso. Messaggi ripetuti
+posizione per 120 s per i dati diretti. Le celle stimate sono un livello separato, descritto sotto. Messaggi ripetuti
 nella stessa cella/secondo/prospettiva contano una volta; più celle nello stesso
 secondo o più lettori/input valutabili sono ambigui e vengono esclusi.
 Le prospettive marcate duplicate sono escluse.
@@ -82,10 +82,27 @@ per default, scala modificabile, zoom, trascinamento, inquadratura e strade OSM
 opzionali riusano la mappa generale. Nessun caricamento remoto automatico.
 
 Il percorso collega cronologicamente le posizioni locali non cached; le linee
-sono indicative, con frecce, e si interrompono oltre 30 s. Inizio/fine indicano
+sono indicative, con frecce, e si interrompono oltre 120 s o su estremi simultanei con coordinate discordanti. Inizio/fine indicano
 il primo e ultimo messaggio non cached, non necessariamente gli estremi fisici
 del viaggio. Coordinate cached restano visibili con cerchio vuoto e motivo,
-ma non prolungano il percorso. Nessuno snapping a strade o interpolazione PQ.
+ma non prolungano il percorso. Nessuno snapping a strade o ferrovie.
+
+Il percorso aggiunge un punto piccolo al centro di ogni secondo intero compreso
+fra due posizioni, interpolando linearmente le coordinate nel tempo (velocità
+costante). Fra 12:01:00 e 12:02:00 compaiono 60 punti. La qualità di ciascuno
+viene ricalcolata dagli episodi AWT di quel secondo, **non interpolata dai
+valori agli estremi**. Secondi ambigui restano grigi; non si estrapola fuori
+dagli estremi o dalla chiamata connessa. Le frazioni di secondo agli estremi
+non producono punti intermedi. Coordinate SIP possono essere datate: il
+percorso è una stima, non un viaggio verificato. Nessuna richiesta di rete.
+
+Media pesata sulla durata e minimo del tratto sono separati dalle statistiche
+puntuali e dalle celle, che continuano a usare soltanto posizioni registrate.
+I punti intermedi espongono prove di entrambi gli estremi e della qualità AWT.
+Non vengono salvati nel database né sommati alle celle aggregate.
+Un 100 mantiene l'assunzione di completezza del logging descritta sopra.
+L'API aggiunge `interpolation` con `points`, `links`, `mean`, `minimum`,
+`evaluated_seconds` e `max_gap_seconds`; limite di 100.000 punti intermedi.
 
 Ogni punto conserva qualità, durata osservata, underrun in ms e prove file:riga.
 Il selettore dei punti permette di consultare separatamente messaggi ripetuti
@@ -121,3 +138,48 @@ precedenti; il riavvio ripetuto non aggiunge duplicati. Prima di applicarlo a
 un archivio esistente creare un backup SQLite consistente. In questa revisione
 le nuove posizioni alimentano PQ e percorso; le derivazioni MOS persistite
 mantengono le precedenti fonti e il precedente metodo.
+
+
+## Zone sulla Mappa qualità generale
+
+Con Perceptual Quality la vista generale mostra celle, senza sovrapporre
+linee o puntini. **Mostra zone stimate** è attivo di default e si può disattivare.
+
+- **Dato diretto**: colore pieno. Qualità associata al secondo di una posizione
+  registrata; le dichiarazioni SIP ammesse mantengono il limite di età ignota.
+- **Zona stimata**: colore trasparente, bordo e riempimento tratteggiati. Compare
+  solo se manca un dato diretto valutabile nella cella, nei filtri selezionati.
+- **Dati insufficienti**: nessuna qualità attribuita. Posizioni note senza un
+  valore valutabile restano grigie; zone mai osservate o attraversate restano vuote.
+
+La qualità AWT di ogni secondo viene localizzata tramite la posizione stimata
+al centro di quel secondo. Si aggregano esclusivamente i secondi valutabili,
+con media pesata sulla durata, senza propagare valori alle celle vicine.
+Se nella stessa cella esiste anche un solo dato diretto valutabile, ha precedenza:
+la sua media e il colore non incorporano stime. Queste restano nel dettaglio,
+marcate come escluse dal colore. La media generale e i secondi campionati nel
+riepilogo restano riferiti ai soli dati diretti; i conteggi delle zone sono separati.
+
+Il dettaglio mostra media, minimo/massimo, secondi interessati da underrun,
+durata complessiva degli underrun, secondi campionati, giorni e passaggi.
+“Secondi interessati” è la durata delle finestre con almeno un underrun, non
+la sola durata del disturbo. I passaggi sono sequenze nella stessa cella e
+prospettiva: secondi consecutivi nelle stime, osservazioni distanti al massimo
+120 s nei dati diretti. Non sono viaggi indipendenti verificati. Per le stime
+sono riportati anche divario minimo/massimo fra estremi e prove di posizioni
+e qualità (prime 20 finestre per cella, troncamento esplicito).
+
+Periodo, tipo di posizione e filtri rete si applicano anche alle stime.
+Posizioni escluse interrompono il collegamento; un cambiamento di contesto
+non compatibile con i filtri nell'intervallo esclude il tratto. Servono almeno
+due posizioni ammesse nella stessa chiamata/sorgente entro 120 s. Non si usano
+cache, sorgenti duplicate, secondi ambigui o posizioni fuori dal periodo.
+La posizione è interpolata linearmente, non adattata a strade o ferrovie.
+
+L'API `/api/geography?metric=perceptual` restituisce `cells` con `origin`
+(`direct` o `estimated`), `direct_cells`, `estimated_cells` e `estimation_method`.
+Una cella diretta può avere `estimate`, riepilogo separato delle stime ignorate
+per il colore. I campioni intermedi non sono più inviati come `routes`:
+`route_samples` ne indica il conteggio prima dell'aggregazione e delle esclusioni
+AWT. Limiti: 100.000 campioni intermedi e 10.000 celle. Nessun cambio schema.
+Il percorso della singola chiamata conserva invece linee, puntini e API precedenti.

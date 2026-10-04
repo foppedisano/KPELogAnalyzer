@@ -216,10 +216,28 @@ Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricor
 - `GET /api/geography?metric=perceptual&cell=50&quality=declared`: celle PQ;
   `quality=fresh` esclude dichiarazioni SIP e configurazioni locali iOS.
   La metrica MOS resta disponibile con `metric=mos` (default dell’API).
+  PQ restituisce `cells` con `origin=direct|estimated`, `direct_cells`,
+  `estimated_cells`, `estimation_method=linear-time-cells-1` e `route_samples`
+  (campioni intermedi prima delle esclusioni AWT). Le celle dirette prevalgono;
+  `estimate`, quando presente, è un riepilogo separato escluso dalla loro media.
+  Media e secondi nel riepilogo generale restano riferiti ai dati diretti.
+  Ogni cella include `passes`, `affected_seconds`, `underrun_ms` e prime 20
+  finestre di `evidence`, con `evidence_truncated`; le stime includono anche
+  `gap_min_seconds` e `gap_max_seconds`. Evidenze con posizioni agli estremi e
+  AWT conservano evento/file/riga. Non vengono più restituiti `routes` grezzi.
+  Limiti PQ: 100.000 posizioni, 100.000 intermedi, 200.000 campioni AWT diretti,
+  10.000 celle. Errori espliciti: restringere il periodo, non trattarli come zero.
 - `GET /api/call-route?call=1&perspective=1&cell=50`: selezione sorgente,
   punti cronologici, segmenti, celle e prove. `perspective` è facoltativa e deve
   appartenere alla chiamata ed essere una prospettiva app non duplicata.
   Massimo 10.000 posizioni. `sip_config` identifica gli aggiornamenti locali
   degli header, con età del fix non verificata. Nessuna fusione dei percorsi.
+  `interpolation` include `points`, `links` (ID degli estremi), `mean`, `minimum`,
+  `evaluated_seconds`, `max_gap_seconds=120` e metodo `linear-time-1` quando
+  calcolato. Massimo 100.000 intermedi. Ogni punto ha `window_ts`, timestamp
+  centrale, posizione stimata, qualità AWT del secondo, prove degli estremi e
+  dell'audio. `value=null` indica secondo non valutabile/ambiguo. I vecchi
+  `segment`/`gap_seconds=30` dei punti registrati restano compatibili, ma per
+  disegnare l'interpolazione usare `interpolation.links` e il suo limite 120 s.
 
 [Metodo, denominatori e limiti](perceptual-quality.md).

@@ -921,6 +921,7 @@ fieldset { border:1px solid var(--line);border-radius:8px;margin:16px 0;padding:
 
 .call-route-panel { margin: 24px 0; }
 .call-route-panel [hidden] { display: none !important; }
+.geo-map-settings label[hidden] { display: none; }
 .call-route-panel #route-point { max-width: 360px; }
 
 .call-reason { display:block; max-width:340px; margin-top:6px; white-space:normal; }

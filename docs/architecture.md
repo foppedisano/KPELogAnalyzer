@@ -226,8 +226,16 @@ rimangono invariati. I marker di arricchimento precedenti non sono incrementati.
 ## Checkpoint PQ, percorsi e transitori
 
 `perceptual.py` calcola PQ in lettura dalle prove AWT e dai confini della
-prospettiva; `perceptual_geo.py` associa soltanto il secondo contenente ogni
-posizione. `call_route.py` conserva percorsi e prove separati per sorgente.
+prospettiva. `call_route.py` calcola su richiesta punti intermedi al centro di
+ogni secondo intero fra posizioni della stessa sorgente entro 120 s: coordinate
+lineari nel tempo, qualità AWT del secondo (mai interpolata dai valori estremi).
+`perceptual_geo.py` associa il secondo contenente ogni posizione ai dati diretti
+e aggrega separatamente i campioni intermedi in celle stimate. Le celle dirette
+prevalgono; `estimate` mantiene il riepilogo escluso dal colore. Non persiste
+stime e non cambia schema, parser o semantica PQ. La risposta generale contiene
+celle e prove limitate, non tutti i puntini; il dettaglio chiamata conserva
+punti e collegamenti. Filtri temporali/rete e ambiguità interrompono le stime.
+Limiti: 100.000 punti intermedi, 10.000 celle; errore esplicito oltre i limiti.
 `ios_positions.py`, invocato prima del controllo del vecchio marker geografico,
 aggiunge le posizioni `sip_config` con marker indipendente e idempotente, senza
 cambiare schema o ID precedenti. L’inizializzazione visita anche gli import

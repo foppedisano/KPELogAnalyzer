@@ -10,7 +10,8 @@ Questa guida è generata da `app/catalog.py`, la stessa fonte usata da **Guida a
 
 Per una prima lettura: [capire le metriche](metric-reading.md),
 [logica della piattaforma](platform-guide.md) e [grafico multimetriche](call-chart.md).
-Le schede sotto sono il riferimento tecnico; il metodo MOS completo è in [mos.md](mos.md).
+Le schede sotto sono il riferimento tecnico; i metodi completi sono in [MOS](mos.md)
+e [Perceptual Quality: celle dirette, stime e percorsi](perceptual-quality.md).
 
 ## Regole comuni
 

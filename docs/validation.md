@@ -2,7 +2,32 @@
 
 [Indice](README.md) · [Limiti aperti](open-issues.md)
 
-## Verifica corrente — 27 settembre 2026
+## Verifica corrente — 4 ottobre 2026, mappa per zone
+
+- **217 test Python superati** nell'ambiente locale; regressioni su qualità
+  intermedia, minuti con 60 campioni, gap, cache, estremi discordanti, filtri,
+  celle stimate, esclusione AWT e precedenza dei dati diretti senza mescolanza.
+- Controlli `node --check` su frontend e test delle scale; catalogo generato
+  dalla fonte e collegamenti locali verificati per la pubblicazione.
+- Browser su DB sintetico isolato: importazione idempotente, dettaglio chiamata,
+  cambio metriche, confronto, celle dirette/stimate, dettaglio prove,
+  disattivazione delle stime e passaggio MOS. Percorso della singola chiamata
+  conservato; nessun errore JavaScript osservato.
+- Container applicativo aggiornato su `http://127.0.0.1:8080/`, health positivo
+  e interrogazione geografica completata; backup consistente prima dell'upgrade.
+  Nessun nuovo schema o reimportazione richiesti dalle stime.
+- I 217 test sono passati anche in Python 3.12 Docker con repository in sola
+  lettura. **6 test Node delle scale superati**. Lo smoke Docker-only ha
+  verificato build, health, import, deduplicazione e persistenza dopo restart:
+  2 import/2 chiamate/27 metriche sintetiche invariati; istanza di prova arrestata.
+  Comandi nella [guida per coding agent](getting-started.md), dettagli nel
+  [checkpoint corrente](checkpoint-2026-10-04.md).
+
+La verifica non valida un modello percettivo, un tragitto stradale/ferroviario
+né il valore predittivo delle stime. I dati sintetici non entrano nel DB personale.
+Le sezioni successive sono cronologia, con conteggi e limiti della loro revisione.
+
+## Verifica storica — 27 settembre 2026
 
 - **115 test Python superati**, con database temporanei e fixture sintetiche:
   parser/API, attribuzione, migrazioni fino a schema 9, deduplicazione,

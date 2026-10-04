@@ -98,3 +98,13 @@ Restano da implementare grafo stradale/ferroviario, map matching, previsione
 dei rami ai bivi, riconoscimento di percorsi ricorrenti, replay causale dei viaggi
 e valutazione a 1/3/5/10 secondi. Un percorso ricorrente non identifica da solo
 il treno fisico. I piani offline sono oggi oggetto di audit, non prodotti dall’API.
+
+
+## Relazione con le celle stimate PQ
+
+Le sequenze persistite `mobility-1` e il loro contesto non sono un modello
+stradale. L'interpolazione PQ è una derivazione distinta, in lettura, fra
+posizioni della stessa chiamata/sorgente entro 120 s. Alimenta punti nel
+dettaglio chiamata e celle stimate nella mappa generale; i dati diretti
+prevalgono. Non predice il percorso futuro o il mezzo di trasporto e non
+modifica le osservazioni originali. [Metodo e limiti](perceptual-quality.md).

@@ -96,8 +96,9 @@ un utente; cambiarlo dopo discontinuità non ricostruibili. La raccolta tra chia
 
 Obiettivo iniziale: 1 Hz durante la chiamata, alla cadenza realmente disponibile,
 da validare per consumo, background e accuratezza. Segnalare sospensione e perdita
-del segnale. In galleria non scrivere coordinate interpolate come misure: le future
-stime del percorso devono restare derivate e separate.
+del segnale. In galleria non scrivere coordinate interpolate come misure: le
+stime del percorso devono restare derivate e separate. La mappa PQ legacy
+implementa già questa separazione; non è un nuovo tipo di fix dell’emitter.
 
 ### `network`: contesto effettivo del traffico
 

@@ -24,7 +24,7 @@ Checkpoint corrente: [4 ottobre 2026](checkpoint-2026-10-04.md).
 | Confrontare due osservazioni e salvare l'analisi | [Diagnostica A/B](diagnostics.md) |
 | Capire le due direzioni e usare il ricevitore GW | [Metodo MOS](mos.md) |
 | Vedere qualità, copertura e variazioni nel tempo per zona | [Mappa qualità](geography.md) |
-| Calcolare PQ, esplorare il percorso e recuperare posizioni iOS | [Perceptual Quality](perceptual-quality.md) |
+| Distinguere celle dirette/stimate, esplorare il percorso e recuperare posizioni iOS | [Perceptual Quality](perceptual-quality.md) |
 | Confrontare contatori audio e transitori | [Transitori](transients.md) |
 | Distinguere rete mobile, Wi-Fi, tethering e sequenze | [Movimento e rete](mobility.md) |
 | Raccogliere le tratte di una conversazione | [Conversazioni e piattaforme](conversations.md) |

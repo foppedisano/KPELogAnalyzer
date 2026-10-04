@@ -36,6 +36,8 @@ describe this as permissively licensed without the owner's instruction.
 - Keep ZIP imports atomic, resource-limited, path-safe and idempotent. No extraction to arbitrary paths.
 - SQLite queries exposed to the UI must remain authorizer-protected and bounded. Do not add network dependencies to the frontend.
 - Changes to `SCHEMA` require a versioned migration, backup instructions and upgrade tests. Never silently delete an existing database.
+- Read `docs/perceptual-quality.md` before changing maps. General PQ cells prefer direct observations; estimated cells fill only traversed gaps. Keep estimates separate from direct means, with endpoint/audio evidence. Do not infer road/rail paths or propagate quality to neighboring unobserved areas. The 120-second position interpolation limit is distinct from the 30-second diagnostic buffer limit.
+- Keep `docs/getting-started.md` executable by an autonomous coding agent on a new machine. Document Docker-only validation, host URL, upgrade/rebuild and safe backup/recovery. Update API, user guides, limits and checkpoint together when behavior changes.
 
 ## Typical analysis task
 

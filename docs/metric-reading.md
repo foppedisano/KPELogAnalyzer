@@ -109,7 +109,11 @@ confrontare medie: dieci secondi buoni in una chiamata lunga non ne descrivono i
 Valori finiti non validi restano archiviati e sono normalmente esclusi; nel
 grafico della chiamata puoi abilitare **Mostra anomali** per le metriche che li
 espongono. I derivati non vengono inventati per input invalidi. I buchi temporali
-restano buchi, sia nel grafico sia nella mappa.
+restano buchi nel grafico. Nella mappa PQ si può stimare la posizione di secondi
+con qualità AWT disponibile, ma soltanto fra estremi della stessa chiamata/sorgente
+entro 120 s. Le celle stimate sono esplicite e non sostituiscono dati diretti.
+Un 100 PQ significa nessun underrun registrato, assumendo completo il log,
+non qualità percepita verificata. [Metodo PQ e zone](perceptual-quality.md).
 
 ## Media plane e terminologia
 

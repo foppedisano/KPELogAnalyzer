@@ -107,7 +107,12 @@ non tutto il tempo trascorso nella zona; non è un MOS validato.
 
 Il recupero iOS degli header locali è implementato anche per gli import storici.
 L’età del fix non è verificata; le nuove posizioni alimentano PQ e percorso,
-non il MOS geografico persistito. Le linee del percorso sono indicative e si
-interrompono oltre 30 s: con raccolta al minuto possono restare punti separati.
-Non sono implementati interpolazione del percorso, map matching o attribuzione
-spaziale dei secondi senza coordinate. [Metodo](perceptual-quality.md).
+non il MOS geografico persistito. Implementata interpolazione lineare delle
+coordinate entro 120 s, con qualità AWT del secondo e prove degli estremi.
+Nel dettaglio chiamata restano linee/punti; nella mappa generale le celle
+stimate riempiono solo i vuoti, senza mescolarsi ai dati diretti.
+Restano aperti map matching stradale/ferroviario, validazione del tragitto,
+quantificazione dell'incertezza spaziale e previsione nelle zone vicine mai
+attraversate. Non dedurre il mezzo di trasporto o qualità percettiva certificata.
+Il limite di 100.000 punti intermedi può richiedere periodi più stretti su
+archivi estesi; non esiste ancora una cache delle aggregazioni PQ. [Metodo](perceptual-quality.md).

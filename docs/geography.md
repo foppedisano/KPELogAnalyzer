@@ -7,26 +7,42 @@ MOS descritte sotto riguardano esclusivamente il percorso MOS.
 
 [Indice](README.md) · [Come leggere il MOS](mos.md) · [Logica della piattaforma](platform-guide.md)
 
-La mappa descrive **qualità osservata e copertura**, non qualità prevista.
-Una zona senza campioni non è una zona buona o cattiva. Il colore rappresenta
-il MOS a profilo fisso basato sulla perdita, con i limiti di quel modello.
+## Uso e lettura dei colori
 
-## Uso
+Aprire **Mappa qualità**. La metrica iniziale è **Perceptual Quality** (PQ),
+mentre MOS è selezionabile. Trascinare, usare rotella o +/−; frecce e +/− sono
+utilizzabili anche da tastiera. **Inquadra dati** inquadra le celle valutabili,
+oppure le posizioni se non ci sono celle. Celle da 50 m a 10 km; default 250 m.
 
-Aprire **Mappa qualità**. Trascinare la mappa, usare la rotella o i pulsanti +/−;
-la tastiera supporta frecce e +/−. **Inquadra dati** torna all'estensione delle
-celle MOS, oppure delle posizioni quando non ci sono celle valutabili.
-Selezionare una cella o una voce di **Zone da osservare** per i dettagli.
+Con PQ la mappa generale privilegia le zone, senza sovrapporre tutti i percorsi:
 
-- Celle da 50 m a 10 km, ricalcolate sulle osservazioni, mai memorizzate come unico dato.
-- Downstream locale dell'app e upstream dichiarato dal peer RTCP, separati.
-- Media pesata sui secondi osservati; rosso <3, arancio 3–4, verde ≥4.
-- Bordo tratteggiato: meno di 60 secondi oppure un solo giorno osservato.
-- Grigio: coordinate locali note, senza MOS associabile ai filtri correnti.
-- Time machine: finestra di 30, 365 o 3652 giorni terminante alla data scelta;
-  inizialmente l'ultimo timestamp dell'archivio, non la data del computer.
-  Intero archivio e date personalizzate sono disponibili. La fine è esclusa.
-- Nessun nome, ZIP, telefono o Call-ID nella risposta cartografica aggregata.
+- **Pieno: dato diretto**, associato al secondo di una posizione registrata.
+- **Trasparente e tratteggiato: stima**, solo dove non c'è un dato diretto.
+  **Mostra zone stimate** è attivo di default e disattivabile.
+- **Grigio: dati insufficienti**, coordinate note senza qualità valutabile.
+  Le zone senza elementi restano vuote; non sono automaticamente buone o cattive.
+
+Le stime usano qualità AWT dei secondi intermedi e coordinate interpolate nel
+tempo fra posizioni della stessa chiamata/sorgente entro 120 s. Non seguono
+strade o ferrovie, non si estendono alle zone vicine mai attraversate e non
+sostituiscono dati diretti. Il clic mostra media, minimo/massimo, disturbi,
+secondi, giorni, passaggi e prove. Se una cella diretta contiene anche stime,
+queste restano consultabili separatamente e non influenzano il colore.
+La media generale PQ considera soltanto dati diretti; non mescola le due origini.
+
+Per vedere **linee e puntini per secondo**, aprire una chiamata e scorrere fino
+al pannello **Percorso e qualità**, scegliendo il device/sorgente. La qualità
+non viene interpolata dai valori agli estremi: si ricalcola dagli eventi AWT.
+[Metodo completo, copertura e limiti](perceptual-quality.md).
+
+Con **MOS** restano valide le regole distinte sotto: downstream locale o upstream
+RTCP, media pesata sul tempo, rosso <3/arancio 3–4/verde ≥4; bordo tratteggiato
+per copertura inferiore a 60 s o un solo giorno. Il clic apre i profili temporali.
+
+La time machine offre 30, 365 o 3652 giorni fino alla data scelta, intero archivio
+o date personalizzate. La fine è esclusa; l'ultimo timestamp viene dall'archivio,
+non dal computer. Periodo, rete e filtro posizioni si applicano anche alle stime.
+Per un archivio esteso restringere il periodo se si supera il limite di calcolo.
 
 La base Natural Earth è inclusa e funziona offline. È una cartografia di contesto
 (1:50 milioni, non stradale); lo zoom non ne aumenta il dettaglio. **Strade online
@@ -128,8 +144,9 @@ Questa attribuzione riguarda solo i dati cartografici, non la licenza del proget
 - Policy tasselli OSM: https://operations.osmfoundation.org/policies/tiles/
 - Attribuzione OSM: https://www.openstreetmap.org/copyright
 
-Nessuna mappa può mostrare la qualità non osservata: gallerie senza posizione o
-senza report possono restare vuote anche in presenza di un'interruzione audio.
+Le stime PQ localizzano approssimativamente qualità ricavata dai log; non
+inventano qualità mancante. Gallerie senza estremi utilizzabili o senza
+qualità valutabile restano vuote anche in presenza di un problema reale.
 
 ## Contesto di rete e sequenze
 
@@ -153,12 +170,13 @@ quando esiste un'associazione valida.
 
 ## Riservatezza e conservazione
 
-La risposta della mappa aggregata omette utenti, sorgenti e Call-ID; il DB conserva
-le evidenze in tabelle separate. È una vista senza identità, non una garanzia
-matematica di anonimato delle coordinate precise. Non esportare il DB come se
+La vista MOS aggregata omette utenti, sorgenti e Call-ID. Il dettaglio PQ
+include riferimenti a file, righe, eventi e prospettive: i nomi dei file possono
+contenere informazioni personali. Non considerare la risposta PQ anonima. Anche la vista MOS senza identità
+non offre una garanzia matematica di anonimato delle coordinate precise. Non esportare il DB come se
 contenesse soltanto celle anonime. Le coppie posizione–MOS e gli input sono
 conservati senza retention automatica, per poter cambiare aggregazioni in futuro.
 
 ## Profili temporali delle zone
 
-Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.
+Con MOS, il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.

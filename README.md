@@ -97,13 +97,18 @@ packets restano evidenze separate. [Metodo, limiti e API](docs/mos.md).
 
 La mappa propone **Perceptual Quality**, indice 0–100 ricavato dagli underrun
 AWT su finestre di un secondo, ritagliate ai confini della chiamata e associate puntualmente ai messaggi di posizione.
-Nel dettaglio della singola chiamata, **Percorso e qualità** mostra le posizioni
-in ordine temporale, separate per sorgente, con celle da 50 m e prove al clic.
+La mappa generale mostra **celle dirette** piene e **celle stimate** trasparenti
+con tratteggio; il dato diretto prevale sempre. Le stime riempiono soltanto le
+zone attraversate da percorsi della stessa chiamata/sorgente e sono disattivabili.
+Nel dettaglio della singola chiamata, **Percorso e qualità** conserva linee e
+puntini per secondo: coordinate interpolate fra posizioni entro 120 s, qualità
+AWT del secondo ricavata dai log. Non segue automaticamente strade o ferrovie.
+Il clic mostra origine, copertura, disturbi ed evidenze; nessuna nuova migrazione.
 MOS resta selezionabile. [Metodo, copertura e movimento](docs/perceptual-quality.md).
 
 La **Mappa qualità** associa posizioni locali e intervalli MOS, con zoom, celle
 regolabili e time machine. Conserva le osservazioni nel DB; aggrega per periodo
-senza mostrare identità. Base offline e strade OSM opzionali.
+con provenienza consultabile. Base offline e strade OSM opzionali.
 [Metodo e limiti](docs/geography.md). Filtri di rete e sequenze temporali
 preparano le analisi future: [contesto e upgrade schema 7](docs/mobility.md).
 

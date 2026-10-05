@@ -60,6 +60,8 @@ SCHEMA = dict(type='object',properties={
 
 CELL_SCHEMA=dict(type='object',properties={k:SCHEMA['properties'][k] for k in
     ('cell','direction','quality','start','end','platform','access','upstream','operator')},required=[],additionalProperties=False)
+CELL_SCHEMA['properties']['metric']=dict(type='string',enum=['mos','perceptual'],default='mos',
+    description='PQ returns direct-priority cells and separate estimates; temporal MOS profiles do not describe PQ.')
 
 
 def cells(db,raw):

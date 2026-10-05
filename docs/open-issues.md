@@ -116,3 +116,12 @@ quantificazione dell'incertezza spaziale e previsione nelle zone vicine mai
 attraversate. Non dedurre il mezzo di trasporto o qualità percettiva certificata.
 Il limite di 100.000 punti intermedi può richiedere periodi più stretti su
 archivi estesi; non esiste ancora una cache delle aggregazioni PQ. [Metodo](perceptual-quality.md).
+
+## Limiti MCP 1.3.0
+
+PQ, celle dirette/stimate, percorsi e connettività sono disponibili tramite
+adattatori ai calcoli esistenti. I profili temporali geografici non supportano
+ancora PQ; non riutilizzare i profili MOS per interpretarla. Campioni PQ e percorso
+non sono paginati e possono superare il limite analitico di 4 MiB anche per una
+singola chiamata. Le viste SQL dei tentativi contano osservazioni grezze, non
+richieste deduplicate del registro UI. [Contratto MCP](analytics.md).

@@ -56,6 +56,12 @@ gli offset della specifica analisi. Gli orari archiviati rimangono invariati.
 
 ## API e dati
 
+MCP 1.3.0 aggiunge `analytics_connectivity` per gli stessi segmenti della UI.
+Le query espongono `a_connectivity` e `a_user_attempts` con file/riga, senza
+testo grezzo o destinatario del tentativo. Sono osservazioni grezze, non righe
+deduplicate del registro; uno scope per chiamata non associa i tentativi.
+[Contratto e limiti](analytics.md).
+
 - `GET /api/calls?attempts=1`: sessioni e richieste, tipo, reason ed evidenze.
   Senza il parametro conserva il registro delle sole sessioni. Limite 2.000 per tipo.
 - `GET /api/connectivity?calls=1,2`: finestre per prospettiva non duplicata.

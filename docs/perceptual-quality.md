@@ -63,6 +63,11 @@ età reale ignota anche usando il campione contemporaneo al messaggio.
 
 ## Accesso
 
+MCP 1.3.0 espone gli stessi calcoli tramite `analytics_perceptual_quality`,
+`analytics_geo_cells` con `metric=perceptual` e `analytics_call_route`.
+Il catalogo riporta esplicitamente l'assunzione di logging AWT completo e la
+precedenza dei dati diretti. [Parametri, evidenze e limiti MCP](analytics.md).
+
 - Chiamata e Confronta → Aggiungi metriche → **Perceptual Quality**, anche CSV.
 - `/api/metrics?calls=1&name=derived.perceptual_quality`.
 - `/api/geography?metric=perceptual&cell=50&quality=fresh`.

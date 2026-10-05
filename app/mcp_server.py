@@ -1,5 +1,6 @@
 """Dependency-free MCP stdio adapter to the local analytical HTTP API."""
 from .geo_temporal import SCHEMA as GEO_TEMPORAL_SCHEMA, CELL_SCHEMA
+from .analytics_current import ROUTE_SCHEMA, PQ_SCHEMA, CONNECTIVITY_SCHEMA, RULES as CURRENT_RULES
 import argparse
 import json
 import sys
@@ -36,8 +37,13 @@ def schema(properties=None, required=None):
     return dict(type='object',properties=properties or {},required=required or [],additionalProperties=False)
 
 
+INSTRUCTIONS += ' ' + ' '.join(CURRENT_RULES)
+
 TOOLS = [
-    ('analytics_geo_cells','Discover geographic grid cell IDs and exact bounds with the same filters as the map. This overview may contain both clock bases; use analytics_geo_temporal with an explicit clock basis for temporal comparisons.','POST','geo-cells',CELL_SCHEMA),
+    ('analytics_call_route','Inspect one call/source route, direct points and separate interpolated AWT quality with endpoint/audio evidence.','POST','call-route',ROUTE_SCHEMA),
+    ('analytics_perceptual_quality','Calculate current PQ samples for explicit calls, with source evidence. PQ 100 assumes complete AWT logging; this is not MOS.','POST','perceptual-quality',PQ_SCHEMA),
+    ('analytics_connectivity','Read separate source-local network/service lanes and evidence for calls OR one import/time range (up to 24 hours). Unknown is not down.','POST','connectivity',CONNECTIVITY_SCHEMA),
+    ('analytics_geo_cells','Discover map cells: metric=perceptual returns direct-priority PQ cells and separate estimates; default mos preserves MOS discovery. MOS may contain both clock bases: use analytics_geo_temporal for MOS temporal comparisons only.','POST','geo-cells',CELL_SCHEMA),
     ('analytics_geo_temporal','Describe an exact map cell over time: historical day/week/month/year bins, recurring hour/weekday/month profiles, coverage, separate clock bases and paginated evidence. Discover metrics and schema in analytics_catalog.geo_temporal. Descriptive only, no forecasts.','POST','geo-temporal',GEO_TEMPORAL_SCHEMA),
     ('analytics_catalog','Discover tables, columns, metric semantics, join keys, rules and examples.','GET','catalog',schema()),
     ('analytics_coverage','Check identities, networks, positions, telemetry and periodic metrics/states including invalid and unassigned observations. Counts are raw availability.','GET','coverage',schema()),
@@ -101,7 +107,7 @@ class Server:
                 return self.error(ident,-32602,'protocolVersion, clientInfo and capabilities required')
             self.initialized=True
             result=dict(protocolVersion=PROTOCOL,capabilities={'tools':{'listChanged':False}},
-                        serverInfo={'name':'kpe-log-analytics','version':'1.2.0'},instructions=INSTRUCTIONS)
+                        serverInfo={'name':'kpe-log-analytics','version':'1.3.0'},instructions=INSTRUCTIONS)
         elif not self.ready:return self.error(ident,-32000,'Initialize first')
         elif method=='tools/list':
             result={'tools':[dict(name=n,description=d,inputSchema=s,

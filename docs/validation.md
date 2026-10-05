@@ -2,7 +2,24 @@
 
 [Indice](README.md) · [Limiti aperti](open-issues.md)
 
-## Verifica corrente — 4 ottobre 2026, mappa per zone
+## Verifica corrente — 5 ottobre 2026, integrazione MCP
+
+- **220 test Python superati** in locale e in Python 3.12 Docker, con repository
+  montato in sola lettura, rete disabilitata e database sintetici temporanei.
+- Verificato MCP stdio → HTTP per i 12 strumenti dichiarati e le nuove funzioni:
+  PQ, percorso, connettività e scoperta celle PQ. Risposte confrontate con la UI/API,
+  comprese celle dirette/stimate, campioni sotto 100 ed evidenze degli estremi.
+- Verificati errori di input, scope delle nuove viste, esclusione del destinatario
+  dei tentativi e del testo grezzo, authorizer SQL e limite di risposta 4 MiB
+  con rollback. Nessuna modifica a frontend, formule, parser o schema.
+- Aggiornate guide MCP, API, installazione autonoma, limiti e checkpoint.
+- Immagine Docker ricostruita e servizio locale aggiornato il 5 ottobre;
+  health host positivo su `http://127.0.0.1:8080/`, parser invariato `1.12.0`.
+  Verificati handshake stdio reale, versione MCP `1.3.0`, 12 strumenti e
+  nuovo catalogo via API. Backup consistente con `quick_check` positivo prima
+  della ricreazione; stesso volume dati, nessuna importazione o migrazione.
+
+## Verifica precedente — 4 ottobre 2026, mappa per zone
 
 - **217 test Python superati** nell'ambiente locale; regressioni su qualità
   intermedia, minuti con 60 campioni, gap, cache, estremi discordanti, filtri,

@@ -2,7 +2,7 @@
 
 [Indice](README.md) · [Modello dei dati](architecture.md)
 
-Riferimento del servizio attuale, schema 11. Le sezioni con numeri di schema
+Riferimento del servizio attuale, schema 12. Le sezioni con numeri di schema
 indicano l’introduzione della funzione, non endpoint separati per versione.
 Il servizio è per analisi locale: non espone ancora previsioni o piani operativi.
 
@@ -241,3 +241,15 @@ Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricor
   disegnare l'interpolazione usare `interpolation.links` e il suo limite 120 s.
 
 [Metodo, denominatori e limiti](perceptual-quality.md).
+
+## Aggiornamento MCP 1.3.0
+
+Gli endpoint analitici aggiungono `POST /api/analytics/call-route`,
+`POST /api/analytics/perceptual-quality` e `POST /api/analytics/connectivity`.
+Accettano rispettivamente `{call_id, perspective_id?, cell?}`, `{call_ids}` e
+`{call_ids}` oppure `{import_id, start, end}`; riusano i calcoli delle API UI.
+Sono in sola lettura, con validazione stretta, snapshot coerente e limite di
+risposta 4 MiB. `POST /api/analytics/geo-cells` accetta ora
+`metric: "perceptual"` oppure `"mos"` (default). Il profilo `geo-temporal`
+non cambia metrica o semantica. Catalogo e copertura espongono anche tentativi
+utente e connettività. [Contratto, esempi e limiti MCP](analytics.md#pq-percorsi-tentativi-e-connettività--mcp-130).

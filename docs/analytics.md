@@ -65,6 +65,9 @@ valgono quindi le modalità di trattamento dati di quel client.
 | Strumento | HTTP | Funzione |
 |---|---|---|
 | `analytics_geo_cells` | POST `/api/analytics/geo-cells` | Celle e confini con i filtri della mappa |
+| `analytics_call_route` | POST `/api/analytics/call-route` | Percorso della chiamata, punti diretti e interpolati separati |
+| `analytics_perceptual_quality` | POST `/api/analytics/perceptual-quality` | Campioni PQ correnti, durata ed evidenze AWT |
+| `analytics_connectivity` | POST `/api/analytics/connectivity` | Timeline rete/servizi per chiamate o sorgente e periodo |
 | `analytics_geo_temporal` | POST `/api/analytics/geo-temporal` | Profili temporali, copertura, contesti ed evidenze paginate |
 | `analytics_catalog` | GET `/api/analytics/catalog` | Viste, colonne, regole, dizionario metriche, modello ed esempi |
 | `analytics_coverage` | GET `/api/analytics/coverage` | Disponibilità grezza di sorgenti, reti, ruoli, posizioni |
@@ -320,3 +323,54 @@ Esempio di richiesta MCP: «Distingui per questa chiamata scheduling dei thread,
 ## Profili temporali delle zone
 
 Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.
+
+## PQ, percorsi, tentativi e connettività — MCP 1.3.0
+
+Il server espone 12 strumenti. `analytics_catalog.current_analysis` descrive
+schemi, limiti e regole dei nuovi adattatori; i calcoli sono quelli della UI,
+senza formule replicate, migrazioni o scritture sui log.
+
+- `analytics_geo_cells`: aggiungere `"metric":"perceptual"` per le celle PQ;
+  `mos` rimane il default compatibile. `origin`, `estimate`, `direct_cells`,
+  `estimated_cells` ed evidenze distinguono dati diretti e stime. Il dato diretto
+  prevale e la media generale non incorpora le stime. I profili
+  `analytics_geo_temporal` restano MOS/perdita/metriche osservate: non supportano PQ.
+- `analytics_call_route`: `{"call_id":1,"perspective_id":1,"cell":50}`;
+  solo `call_id` è obbligatorio. Una sorgente per volta, scelta come nella UI.
+  Posizioni dirette e `interpolation` restano separate con prove degli estremi
+  e dell'audio. Limiti: 10.000 posizioni, 100.000 intermedi, gap 120 s.
+- `analytics_perceptual_quality`: `{"call_ids":[1]}`, da 1 a 20 ID SIP interni;
+  restituisce `method`, `samples`, `rules`, massimo 100.000 campioni.
+  Riusa la derivazione del grafico, conservando le prospettive; non esclude
+  automaticamente le copie storiche come fa la mappa. PQ 100 assume completo
+  il logging AWT, anche senza heartbeat; non equivale a MOS o qualità certificata.
+- `analytics_connectivity`: `{"call_ids":[1]}` oppure
+  `{"import_id":1,"start":"2026-01-01 12:00:00","end":"2026-01-01 13:00:00"}`.
+  Non combinare le due modalità. Timestamp osservati senza fuso, massimo 24 ore
+  e 50.000 evidenze per sorgente; da 1 a 20 chiamate e massimo 40 prospettive.
+  Le sette fasce restano separate, con scadenza 30 s e prove file:riga.
+
+I tre nuovi endpoint leggono uno snapshot coerente e rifiutano risposte oltre
+4 MiB con errore esplicito: restringere chiamate/periodo quando disponibile.
+PQ e percorso non hanno paginazione o filtro temporale; una singola chiamata
+oltre il limite richiede la UI/API ordinaria o una futura estensione del contratto.
+Non si troncano silenziosamente i punti né si pubblicano i log originali.
+
+Le query SQL scoprono inoltre `a_connectivity` e `a_user_attempts`, con ID evento,
+file/riga, stato e ragione. Sono osservazioni grezze: le richieste non sono
+deduplicate come il registro UI e non rappresentano chiamate uniche. Il
+destinatario della richiesta e il testo grezzo sono esclusi. Con `scope.call_ids`
+i tentativi rimangono vuoti; la connettività include solo attribuzioni esatte
+al Call-ID. Per il contesto sorgente anche fuori call usare lo strumento timeline.
+`analytics_coverage` include conteggi grezzi per stato e livello.
+
+Esempio senza attribuzioni causali:
+
+```sql
+SELECT status, COUNT(*) AS observations FROM a_user_attempts GROUP BY status
+```
+
+Aggiornare il container seguendo la [guida di installazione](getting-started.md),
+poi riconnettere il client MCP per rileggere elenco strumenti e istruzioni.
+Nessun cambio di schema, parser o modello PQ. Le ricette SQL restano compatibili;
+i nuovi strumenti dedicati non sono definizioni salvabili in `analytics_save_recipe`.

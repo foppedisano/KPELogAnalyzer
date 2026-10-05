@@ -77,6 +77,14 @@ viene pubblicato su Git. Non cambiare il binding locale in `0.0.0.0`.
 
 ## Analizzare i propri log
 
+Per l'accesso conversazionale seguire la [configurazione MCP stdio](analytics.md).
+L'adattatore 1.3.0 usa il container già attivo, senza Python host o porte nuove:
+`docker compose exec -T analyzer python -m app.mcp_server`.
+Dopo il rebuild riconnettere il client e verificare `tools/list` (12 strumenti),
+`analytics_catalog.current_analysis` e `analytics_coverage`. PQ, percorsi e
+rete/servizi sono esposti insieme alle query; il client non viene configurato
+automaticamente. Non eseguire import demo sull'archivio personale.
+
 1. **Importa ZIP**: carica uno o più log set. Ogni archivio resta una sorgente.
 2. **Sorgenti e copertura**: verifica chiamate distinte, nuove/già presenti e avvisi.
 3. **Chiamate**: apri il MOS downstream, poi usa **Aggiungi metriche** o **Rete**.

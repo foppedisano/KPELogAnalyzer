@@ -12,6 +12,7 @@ from .db import rows
 from .mos import MODEL
 from .media_semantics import MEDIA_PLANE
 from .geo_temporal import contract as geo_temporal_contract
+from .analytics_current import contract as current_contract, RULES as CURRENT_RULES
 
 VERSION = 'analytics-2'
 MAX_ROWS = 1000
@@ -101,6 +102,21 @@ VIEWS = {
  SELECT t.* FROM telemetry_records t JOIN events e ON e.id=t.event_id
  WHERE e.import_id IN (SELECT id FROM a_sources)'''),
 }
+VIEWS['a_connectivity'] = ('Raw service/network observations with source evidence, not continuous availability. Explicit call scope includes only exact attributed calls; use analytics_connectivity for source-local lanes.', '''
+ SELECT n.*,e.file_id,e.line_no,f.name filename FROM connectivity_events n
+ JOIN events e ON e.id=n.event_id JOIN files f ON f.id=e.file_id
+ WHERE n.import_id IN (SELECT id FROM a_sources)
+ AND ((SELECT all_calls FROM a_settings)=1 OR n.call_id IN (SELECT call_id FROM a_scope))
+ AND ((SELECT start FROM a_settings) IS NULL OR n.ts >= (SELECT start FROM a_settings))
+ AND ((SELECT end FROM a_settings) IS NULL OR n.ts < (SELECT end FROM a_settings))''')
+VIEWS['a_user_attempts'] = ('Raw user requests, not SIP calls or deduplicated UI entries. Empty for explicit call scope: no time/target association is inferred. target is deliberately omitted.', '''
+ SELECT a.event_id,a.import_id,a.ts,a.reason,a.reason_event_id,
+ CASE WHEN a.reason_event_id IS NULL THEN 'requested' ELSE 'blocked' END status,
+ e.file_id,e.line_no,f.name filename FROM user_attempts a
+ JOIN events e ON e.id=a.event_id JOIN files f ON f.id=e.file_id
+ WHERE (SELECT all_calls FROM a_settings)=1
+ AND ((SELECT start FROM a_settings) IS NULL OR a.ts >= (SELECT start FROM a_settings))
+ AND ((SELECT end FROM a_settings) IS NULL OR a.ts < (SELECT end FROM a_settings))''')
 VIEWS['a_periodic_metadata'] = ('Typed states, sequence identifiers and observed clocks; JSON values retain meaning and source line.',
     """SELECT m.*,e.file_id,f.name filename FROM periodic_metadata m JOIN events e ON e.id=m.event_id JOIN files f ON f.id=e.file_id
     WHERE (m.perspective_id IN (SELECT id FROM a_observations) OR (m.perspective_id IS NULL AND (SELECT all_calls FROM a_settings)=1))
@@ -383,9 +399,9 @@ def catalog(db):
             tables[name]=dict(description=meaning,dataset='transients' if name in TRANSIENT_TABLES or name=='a_transient_counter_intervals' else 'incident_summary' if name=='a_incident_call_summary' else 'incidents' if name in INCIDENT_TABLES or name=='a_counter_incident_matches' else 'mos' if name in DERIVED else 'base',
                              columns=[dict(name=r[1],type=r[2]) for r in db.execute('PRAGMA table_info('+name+')')])
         from .catalog import CATALOG, PERIODIC_METADATA
-        return dict(version=VERSION,media_plane=MEDIA_PLANE,geo_temporal=geo_temporal_contract(),tables=tables,rules=RULES+MEDIA_PLANE['rules'],metrics=CATALOG,periodic_metadata=PERIODIC_METADATA,model=MODEL,examples=EXAMPLES,
+        return dict(version=VERSION,media_plane=MEDIA_PLANE,geo_temporal=geo_temporal_contract(),current_analysis=current_contract(),tables=tables,rules=RULES+MEDIA_PLANE['rules']+CURRENT_RULES,metrics=CATALOG,periodic_metadata=PERIODIC_METADATA,model=MODEL,examples=EXAMPLES,
                     limits=dict(rows=MAX_ROWS,query_seconds=3,prepare_seconds=30,mos_intervals=MAX_INTERVALS),
-                    endpoints=['catalog','coverage','query','evidence','recipes','run-recipe','geo-temporal','geo-cells'])
+                    endpoints=['catalog','coverage','query','evidence','recipes','run-recipe','geo-temporal','geo-cells','call-route','perceptual-quality','connectivity'])
     finally: db.rollback()
 
 
@@ -398,6 +414,8 @@ def coverage(db):
         identities_confirmed=db.execute('SELECT COUNT(*) FROM source_identities').fetchone()[0],
         roles_confirmed=db.execute('SELECT COUNT(*) FROM observation_roles').fetchone()[0],
         telemetry_records=db.execute('SELECT COUNT(*) FROM telemetry_records').fetchone()[0],
+        connectivity=rows(db,'SELECT layer,state,COUNT(*) observations FROM connectivity_events GROUP BY layer,state'),
+        user_attempts=rows(db,"SELECT CASE WHEN reason_event_id IS NULL THEN 'requested' ELSE 'blocked' END status,COUNT(*) observations FROM user_attempts GROUP BY status"),
         positions=rows(db,'SELECT kind,valid,COUNT(*) observations FROM geo_positions GROUP BY kind,valid'),
         note='Conteggi grezzi di disponibilità, non chiamate indipendenti o durata coperta. Verificare la copertura per la selezione.')
 

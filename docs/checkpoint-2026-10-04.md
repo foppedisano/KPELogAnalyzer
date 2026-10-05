@@ -110,3 +110,26 @@ resa delle celle e del percorso singolo prima di cambiare il modello.
 > percorso. Non modificare dati personali né pubblicare log. Il progetto deve
 > restare installabile autonomamente da un coding agent. Attendi la mia nuova
 > richiesta prima di avviare ulteriori evoluzioni del modello.
+
+## Integrazione MCP — 5 ottobre 2026
+
+MCP 1.3.0 espone 12 strumenti: aggiunti percorso chiamata, campioni PQ e
+timeline rete/servizi; `analytics_geo_cells` accetta PQ con precedenza diretta
+e stime separate. Catalogo e copertura includono il contratto corrente e le
+viste `a_connectivity` / `a_user_attempts`. Nessun cambio al modello, schema o
+parser; nessuna associazione dei tentativi per numero/tempo. Le viste contano
+osservazioni grezze e non riproducono la deduplicazione del registro UI.
+Configurazione Docker-only e riconnessione in [analisi MCP](analytics.md).
+Restano distinti profili temporali MOS e celle PQ; limite 4 MiB per i nuovi
+adattatori, senza paginazione PQ/percorso. Vedere il registro delle verifiche
+per gli esiti di questa integrazione. Il punto di ripartenza successivo è
+[checkpoint MCP del 5 ottobre](checkpoint-2026-10-05.md).
+
+Validazione: 220 test passati in locale e in Python 3.12 Docker isolato.
+Servizio locale ricostruito e aggiornato il 5 ottobre, health positivo sullo
+stesso `http://127.0.0.1:8080/`. Handshake MCP stdio reale verificato: versione
+1.3.0, 12 strumenti e catalogo aggiornato. Backup consistente locale
+`pre-mcp-130-20261005-043502.sqlite3` nel volume dati, verificato con quick_check;
+nessun import demo sull'istanza personale. Riconnettere il client MCP per
+ricaricare gli strumenti. Commit e push autorizzati dall'utente il 5 ottobre;
+verificare il commit e lo stato remoto come indicato nel checkpoint successivo.

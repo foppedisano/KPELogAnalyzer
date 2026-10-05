@@ -311,6 +311,9 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/api/analytics/'):
                 from . import analytics
                 name=path.removeprefix('/api/analytics/')
+                if method=='POST' and name in ('call-route','perceptual-quality','connectivity'):
+                    from .analytics_current import run
+                    return self.send(run(db,name,obj))
                 if method=='POST' and name=='geo-cells':
                     from .geo_temporal import cells
                     return self.send(cells(db,obj))

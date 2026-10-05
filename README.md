@@ -28,6 +28,8 @@ separa guide operative, metodo MOS, mappa, API e contratto per gli sviluppatori 
 La sezione **Analisi libere** e il server **MCP stdio** espongono un catalogo
 semantico e query componibili: episodi MOS, medie pesate, copertura, ricevitori e
 contesto rete, con evidenze e ricette versionate. [Configurazione e guida](docs/analytics.md).
+MCP espone anche PQ, celle dirette/stimate, percorso della chiamata e timeline
+rete/servizi, con le stesse derivazioni della UI e riferimenti alle evidenze.
 
 ## Android e conversazioni
 

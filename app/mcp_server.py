@@ -1,6 +1,7 @@
 """Dependency-free MCP stdio adapter to the local analytical HTTP API."""
 from .geo_temporal import SCHEMA as GEO_TEMPORAL_SCHEMA, CELL_SCHEMA
 from .analytics_current import ROUTE_SCHEMA, PQ_SCHEMA, CONNECTIVITY_SCHEMA, RULES as CURRENT_RULES
+from .network_switches import SCHEMA as SWITCH_SCHEMA
 import argparse
 import json
 import sys
@@ -40,6 +41,7 @@ def schema(properties=None, required=None):
 INSTRUCTIONS += ' ' + ' '.join(CURRENT_RULES)
 
 TOOLS = [
+    ('analytics_network_switches','Explicit KPE Switch Network requests, source evidence, separately identified interface context and observed/interpolated locations. Never infer a switch from a re-INVITE or a generic network change.','POST','network-switches',SWITCH_SCHEMA),
     ('analytics_call_route','Inspect one call/source route, direct points and separate interpolated AWT quality with endpoint/audio evidence.','POST','call-route',ROUTE_SCHEMA),
     ('analytics_perceptual_quality','Calculate current PQ samples for explicit calls, with source evidence. PQ 100 assumes complete AWT logging; this is not MOS.','POST','perceptual-quality',PQ_SCHEMA),
     ('analytics_connectivity','Read separate source-local network/service lanes and evidence for calls OR one import/time range (up to 24 hours). Unknown is not down.','POST','connectivity',CONNECTIVITY_SCHEMA),
@@ -107,7 +109,7 @@ class Server:
                 return self.error(ident,-32602,'protocolVersion, clientInfo and capabilities required')
             self.initialized=True
             result=dict(protocolVersion=PROTOCOL,capabilities={'tools':{'listChanged':False}},
-                        serverInfo={'name':'kpe-log-analytics','version':'1.3.0'},instructions=INSTRUCTIONS)
+                        serverInfo={'name':'kpe-log-analytics','version':'1.4.0'},instructions=INSTRUCTIONS)
         elif not self.ready:return self.error(ident,-32000,'Initialize first')
         elif method=='tools/list':
             result={'tools':[dict(name=n,description=d,inputSchema=s,

@@ -326,7 +326,7 @@ Il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricor
 
 ## PQ, percorsi, tentativi e connettività — MCP 1.3.0
 
-Il server espone 12 strumenti. `analytics_catalog.current_analysis` descrive
+Il server corrente (1.4.0) espone 13 strumenti. `analytics_catalog.current_analysis` descrive
 schemi, limiti e regole dei nuovi adattatori; i calcoli sono quelli della UI,
 senza formule replicate, migrazioni o scritture sui log.
 
@@ -374,3 +374,12 @@ Aggiornare il container seguendo la [guida di installazione](getting-started.md)
 poi riconnettere il client MCP per rileggere elenco strumenti e istruzioni.
 Nessun cambio di schema, parser o modello PQ. Le ricette SQL restano compatibili;
 i nuovi strumenti dedicati non sono definizioni salvabili in `analytics_save_recipe`.
+
+
+## Switch Network espliciti
+
+Eventi, timeline, grafici e mappe evidenziano le richieste Switch Network con
+un marker viola e prove file:riga. Transizioni contestuali e posizioni stimate
+sono dichiarate separatamente. API `POST /api/analytics/network-switches` e MCP
+1.4.0 (13 strumenti), `analytics_network_switches`, usano lo stesso calcolo.
+Vedi [regole, campi e limiti](network-switches.md). Nessuna reimportazione richiesta.

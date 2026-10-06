@@ -4,6 +4,8 @@
 
 Questa pagina distingue le funzioni disponibili dalle evoluzioni previste.
 La raccolta dei dati necessari non implica che esista già l'algoritmo che li usa.
+Per concordare priorità e attività usare la [lista TODO](todo.md): un limite
+documentato non costituisce automaticamente un'attività di sviluppo approvata.
 
 ## MOS-001 — Indice di perdita, non misura percettiva
 
@@ -125,3 +127,23 @@ ancora PQ; non riutilizzare i profili MOS per interpretarla. Campioni PQ e perco
 non sono paginati e possono superare il limite analitico di 4 MiB anche per una
 singola chiamata. Le viste SQL dei tentativi contano osservazioni grezze, non
 richieste deduplicate del registro UI. [Contratto MCP](analytics.md).
+
+
+## SWITCH-001 — Richiesta esplicita e contesto incompleto
+
+Il marker KPE prova una richiesta, non il completamento dello switch. Non
+colleghiamo automaticamente re-INVITE o guasti allo switch. Il contesto
+interfaccia entro ±3 s può descrivere Wi-Fi/mobile, senza provare EDGE/LTE/5G.
+Eventi ambigui restano non attribuiti; quelli senza estremi locali compatibili
+restano senza posizione. Formati diversi richiedono evidenza e regressioni
+sintetiche. Calcolo in lettura con limiti espliciti, senza paginazione;
+vedi [Switch Network](network-switches.md).
+
+
+## LOCAL-001 — Finestre locali storiche troppo ampie
+
+Parser 1.12.1 corregge il riutilizzo di linee già terminate per le nuove importazioni.
+Elenco log, connettività e attribuzione Switch delimitano in lettura le vecchie
+finestre con terminazioni esplicite. Le altre derivazioni storiche non sono
+riscritte: una riparazione completa deve preservare evidenze, ID e annotazioni
+ed essere concordata. Vedi [ambito della correzione](call-events.md).

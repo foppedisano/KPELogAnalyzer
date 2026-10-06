@@ -391,6 +391,7 @@ def query(db,raw):
 
 
 def catalog(db):
+    from .network_switches import SCHEMA as SWITCH_SCHEMA, VERSION as SWITCH_VERSION
     c=validate({'sql':'SELECT 1'})
     try:
         db.execute('BEGIN');prepare(db,c)
@@ -399,9 +400,9 @@ def catalog(db):
             tables[name]=dict(description=meaning,dataset='transients' if name in TRANSIENT_TABLES or name=='a_transient_counter_intervals' else 'incident_summary' if name=='a_incident_call_summary' else 'incidents' if name in INCIDENT_TABLES or name=='a_counter_incident_matches' else 'mos' if name in DERIVED else 'base',
                              columns=[dict(name=r[1],type=r[2]) for r in db.execute('PRAGMA table_info('+name+')')])
         from .catalog import CATALOG, PERIODIC_METADATA
-        return dict(version=VERSION,media_plane=MEDIA_PLANE,geo_temporal=geo_temporal_contract(),current_analysis=current_contract(),tables=tables,rules=RULES+MEDIA_PLANE['rules']+CURRENT_RULES,metrics=CATALOG,periodic_metadata=PERIODIC_METADATA,model=MODEL,examples=EXAMPLES,
+        return dict(version=VERSION,network_switches=dict(version=SWITCH_VERSION,request_schema=SWITCH_SCHEMA,tool='analytics_network_switches'),media_plane=MEDIA_PLANE,geo_temporal=geo_temporal_contract(),current_analysis=current_contract(),tables=tables,rules=RULES+MEDIA_PLANE['rules']+CURRENT_RULES,metrics=CATALOG,periodic_metadata=PERIODIC_METADATA,model=MODEL,examples=EXAMPLES,
                     limits=dict(rows=MAX_ROWS,query_seconds=3,prepare_seconds=30,mos_intervals=MAX_INTERVALS),
-                    endpoints=['catalog','coverage','query','evidence','recipes','run-recipe','geo-temporal','geo-cells','call-route','perceptual-quality','connectivity'])
+                    endpoints=['catalog','coverage','query','evidence','recipes','run-recipe','geo-temporal','geo-cells','call-route','perceptual-quality','connectivity','network-switches'])
     finally: db.rollback()
 
 

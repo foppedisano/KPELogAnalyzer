@@ -180,3 +180,12 @@ conservati senza retention automatica, per poter cambiare aggregazioni in futuro
 ## Profili temporali delle zone
 
 Con MOS, il clic su una cella apre storico giornaliero/settimanale/mensile/annuale, ricorrenze orarie, copertura ed evidenze. Gli stessi calcoli sono disponibili tramite `POST /api/analytics/geo-temporal` e `analytics_geo_temporal`; `POST /api/analytics/geo-cells` e `analytics_geo_cells` scoprono le celle. [Guida, denominatori e contratto completo](geo-temporal.md). Il catalogo MCP espone gli schemi in `geo_temporal`. Riconnettere il client MCP per rileggere i nuovi strumenti.
+
+
+## Switch Network espliciti
+
+Eventi, timeline, grafici e mappe evidenziano le richieste Switch Network con
+un marker viola e prove file:riga. Transizioni contestuali e posizioni stimate
+sono dichiarate separatamente. API `POST /api/analytics/network-switches` e MCP
+1.4.0 (13 strumenti), `analytics_network_switches`, usano lo stesso calcolo.
+Vedi [regole, campi e limiti](network-switches.md). Nessuna reimportazione richiesta.

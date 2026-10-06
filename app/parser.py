@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
 
-PARSER_VERSION = '1.12.0'
+PARSER_VERSION = '1.12.1'
 MAX_ZIP = 64 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 MAX_FILE = 40 * 1024 * 1024
@@ -254,7 +254,7 @@ def ingest(db, data, name, label=''):
             line, text = r['line'], r['text']
             if 'added to the call list' in text:
                 leg = dict(line=line, start=r['ts'], end=None, connected=None, cid=None, summary=None)
-                if line in active:
+                if line in active and not active[line].get('end'):
                     # A reused line must never make an older incomplete leg swallow later metrics.
                     active[line]['end'] = r['ts']
                     active[line]['incomplete'] = True

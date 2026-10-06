@@ -32,7 +32,7 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(len(replies),8)
         self.assertEqual(replies[0]['result']['protocolVersion'],PROTOCOL)
         self.assertEqual({t['name'] for t in replies[1]['result']['tools']},{t[0] for t in TOOLS})
-        self.assertEqual(len(TOOLS),12)
+        self.assertEqual(len(TOOLS),13)
         self.assertEqual(json.loads(replies[2]['result']['content'][0]['text'])['rows'],[[1]])
         self.assertTrue(replies[3]['result']['isError'])
         self.assertTrue(all(not reply['result']['isError'] for reply in replies[4:]))

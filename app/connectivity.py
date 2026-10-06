@@ -176,7 +176,7 @@ def iso(t):
     return t.isoformat(' ', timespec='microseconds')
 
 
-def timeline(db, iid, start, end):
+def timeline(db, iid, start, end, call_id=None, perspective_id=None):
     """Exact-time segments, queryable at any second; observations expire after 30 s."""
     start, end = datetime.fromisoformat(start), datetime.fromisoformat(end)
     if start.tzinfo or end.tzinfo or end <= start or (end-start).total_seconds() > 86400:
@@ -227,8 +227,10 @@ def timeline(db, iid, start, end):
                 previous['end'] = segment['end']
             else:
                 lanes[layer].append(segment)
+    from .network_switches import collect
+    switches=collect(db,import_id=iid,start=iso(start),end=iso(end),call_id=call_id,perspective_id=perspective_id)
     return dict(import_id=iid, label=source['label'], clock_offset=source['clock_offset'], start=iso(start), end=iso(end),
-                ttl_seconds=TTL, lanes=lanes, evidence=evidence)
+                ttl_seconds=TTL, lanes=lanes, evidence=evidence,network_switches=switches)
 
 
 def for_calls(db, ids):
@@ -237,10 +239,12 @@ def for_calls(db, ids):
     result=[]
     for p in db.execute(f'''SELECT * FROM perspectives WHERE call_id IN ({','.join('?' for _ in ids)})
         AND id NOT IN (SELECT perspective_id FROM effective_duplicates) ORDER BY id''', ids):
+        from .call_events import bounded
+        p=bounded(db,p)
         end = p['end'] or db.execute('SELECT MAX(ts) FROM events WHERE import_id=? AND call_id=?',(p['import_id'],p['call_id'])).fetchone()[0]
         if not p['start'] or not end or end <= p['start']:
             continue
         if len(result)>=40:
             raise ValueError('Troppe prospettive: restringere la selezione')
-        result.append(dict(timeline(db,p['import_id'],p['start'],end), perspective_id=p['id'],call_id=p['call_id']))
+        result.append(dict(timeline(db,p['import_id'],p['start'],end,call_id=p['call_id'],perspective_id=p['id']), perspective_id=p['id'],call_id=p['call_id']))
     return result

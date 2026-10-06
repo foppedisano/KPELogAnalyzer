@@ -2,7 +2,19 @@
 
 [Indice](README.md) · [Limiti aperti](open-issues.md)
 
-## Verifica corrente — 5 ottobre 2026, integrazione MCP
+## Verifica corrente — Switch Network e log per famiglia
+
+- 231 test Python superati in locale e Docker 3.12, 9 test JavaScript superati.
+- Dopo la correzione delle prestazioni: 11 regressioni mirate nuovamente positive.
+- Browser sintetico: upload, dettaglio, metriche, confronto, rotazioni VDLog,
+  filtri indipendenti, contesto, escaping HTML, palette e console senza errori.
+- Container isolato: import sintetici, deduplicazione e persistenza dopo restart.
+- Servizio principale aggiornato su 127.0.0.1:8080, health parser 1.12.1;
+  API famiglie e limite storico di terminazione verificati in sola lettura.
+- Backup pre-Switch verificato con quick_check. Nessun backfill sui dati personali.
+- [Checkpoint e limiti residui](checkpoint-2026-10-05-switch-network.md).
+
+## Verifica precedente — 5 ottobre 2026, integrazione MCP
 
 - **220 test Python superati** in locale e in Python 3.12 Docker, con repository
   montato in sola lettura, rete disabilitata e database sintetici temporanei.
@@ -256,3 +268,30 @@ Final Docker verification: container healthy on 127.0.0.1:8080, parser 1.2.0. An
   annotazioni e record geografici preesistenti preservati.
 - Risultati e materiale reale esclusi da Git. Guide, API, architettura e limiti
   consolidati nel [checkpoint](checkpoint-2026-10-04.md).
+
+6 ottobre 2026: indicatore condiviso di caricamento verificato nel browser con
+richieste rallentate (comparsa/scomparsa, aria-busy, console pulita). Suite Python:
+231 test superati; sintassi app/geography/diagnostics/analysis-ui verificata.
+Servizio localhost:8080 aggiornato e health positivo.
+
+6 ottobre 2026: dettaglio tentativi con ID stabile ricercabile e colori per log.
+231 test Python superati, sintassi JS verificata, browser su fixture sintetica
+positivo e console pulita. Servizio locale ricostruito e health positivo.
+
+6 ottobre 2026: controlli compatti uniformati anche ai tentativi. Default limitato
+a richiesta e prova esplicita del blocco; Tutto include il contesto per famiglia
+da -5 a +10 secondi nella stessa sorgente. API /api/attempt-events in sola
+lettura, senza nuove associazioni SIP. 232 test passati, sintassi JS positiva,
+browser sintetico verificato (contesto, visibilità e conservazione delle scelte),
+console pulita. Servizio http://127.0.0.1:8080 ricostruito, health positivo;
+verificato il tentativo #4840333 con le due prove attese e 18 famiglie disponibili.
+Nessuna modifica ai dati personali. Commit e push restano sospesi.
+
+6 ottobre 2026: contesto dei log dei tentativi orientato agli antecedenti: da
+60 secondi prima della richiesta fino al timestamp della prova esplicita del
+blocco inclusa, oppure alla richiesta se la prova manca. Nessun evento successivo
+alla fine della finestra; intervalli delle sessioni SIP invariati. Guide e API
+aggiornate. Verificati fallback senza blocco, blocco successivo alla richiesta,
+esclusione degli eventi successivi e paginazione su fixture sintetiche.
+Servizio locale ricostruito e health positivo; verifica API sul tentativo #4840333.
+Nessuna modifica ai dati personali; commit/push restano sospesi.

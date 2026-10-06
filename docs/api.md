@@ -253,3 +253,28 @@ risposta 4 MiB. `POST /api/analytics/geo-cells` accetta ora
 `metric: "perceptual"` oppure `"mos"` (default). Il profilo `geo-temporal`
 non cambia metrica o semantica. Catalogo e copertura espongono anche tentativi
 utente e connettività. [Contratto, esempi e limiti MCP](analytics.md#pq-percorsi-tentativi-e-connettività--mcp-130).
+
+
+## Switch Network espliciti
+
+Eventi, timeline, grafici e mappe evidenziano le richieste Switch Network con
+un marker viola e prove file:riga. Transizioni contestuali e posizioni stimate
+sono dichiarate separatamente. API `POST /api/analytics/network-switches` e MCP
+1.4.0 (13 strumenti), `analytics_network_switches`, usano lo stesso calcolo.
+Vedi [regole, campi e limiti](network-switches.md). Nessuna reimportazione richiesta.
+
+
+## Log per famiglia nella chiamata
+
+Nome generico, colore per provenienza e controlli indipendenti di visibilità e
+ambito call/intervallo: [guida e API](call-events.md). Endpoint locale
+`GET /api/call-events`; default tutte le famiglie visibili, solo eventi attribuiti.
+
+
+`GET /api/events` restituisce anche `log_family` e `log_label`, coerenti con
+l’elenco chiamata. La sola annotazione non cambia filtri, attribuzioni o paginazione.
+
+`GET /api/attempt-events?attempt=ID` estende gli stessi controlli ai tentativi:
+modalità per famiglia `evidence` (default), `interval`, `hide`. Contesto limitato
+alla stessa importazione, da 60 secondi prima della richiesta alla prova del blocco
+inclusa, oppure alla richiesta se manca la prova. [Contratto e limiti](call-events.md).

@@ -11,6 +11,7 @@ const esc = (x) =>
   );
 const number = (n) =>
   new Intl.NumberFormat("it-IT", { maximumFractionDigits: 2 }).format(n ?? 0);
+const recordReference = c => c.id < 0 ? `Tentativo #${-c.id}` : `Chiamata #${c.id}`;
 const shortIdentity = (s) => (s || "Identità non disponibile").split("@")[0];
 const stamp = (s) => (s ? s.slice(0, 19) : "—");
 const timeValue = (s) => Date.parse(s.replace(" ", "T") + "Z"); // neutral clock axis, no assumed timezone
@@ -30,11 +31,30 @@ let state = {
 let chartCleanup = null,
   uploadFiles = [],
   renderToken = 0;
+let pendingLoads = 0;
+async function withLoading(work) {
+  const indicator = $("#loading-status");
+  const page = $("#page");
+  pendingLoads++;
+  if (indicator) indicator.hidden = false;
+  if (page) page.setAttribute("aria-busy", "true");
+  try {
+    return await work();
+  } finally {
+    pendingLoads--;
+    if (!pendingLoads) {
+      if (indicator) indicator.hidden = true;
+      if (page) page.setAttribute("aria-busy", "false");
+    }
+  }
+}
 async function api(path, options = {}) {
-  const r = await fetch("/api/" + path, options);
-  const data = await r.json();
-  if (!r.ok) throw Error(data.error || "Errore del servizio");
-  return data;
+  return withLoading(async () => {
+    const r = await fetch("/api/" + path, options);
+    const data = await r.json();
+    if (!r.ok) throw Error(data.error || "Errore del servizio");
+    return data;
+  });
 }
 function post(path, obj, method = "POST") {
   return api(path, {
@@ -137,7 +157,7 @@ function callSortValue(c, key) {
   return c[key] ?? null;
 }
 function callTable(calls) {
-  return `<div class="table-wrap"><table><thead><tr><th aria-label="Seleziona"></th><th>Chiamata / interlocutori</th><th>MOS ↓ downstream</th><th>MOS ↑ upstream</th><th>Stato osservato</th><th>Durata connessa</th><th>Prospettive</th><th>Metriche</th></tr></thead><tbody>${calls.map((c) => `<tr class="call-row" data-id="${c.id}" tabindex="0"><td><input ${c.id<0?'disabled':''} type="checkbox" class="call-check" aria-label="Seleziona chiamata ${c.id}" value="${c.id}" ${state.selected.has(c.id) ? "checked" : ""}></td><td><div class="identity" title="${esc(c.caller + " → " + c.callee)}">${c.id<0?'Tentativo utente':esc(shortIdentity(c.caller))} <span class="muted">→</span> ${esc(shortIdentity(c.callee))}</div><div class="call-date">${stamp(c.start)} <span class="muted">· #${c.id}</span></div></td>${mosCell(c,"downstream")}${mosCell(c,"upstream")}<td><span class="tag ${/failed|blocked/.test(c.status) ? "warn" : c.status.includes("partial") ? "neutral" : ""}">${esc(c.status==='blocked'?'Bloccato prima del SIP':c.status==='requested'?'Richiesta utente':c.status)}</span><small class="call-reason">${esc(c.reason||'')}${c.copies>1?' · '+c.copies+' copie dello stesso messaggio':''}</small></td><td class="mono nowrap">${duration(c)}</td><td>${c.perspectives} <span class="muted">sorgenti</span></td><td class="mono">${number(c.metrics)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th aria-label="Seleziona"></th><th>Chiamata / interlocutori</th><th>MOS ↓ downstream</th><th>MOS ↑ upstream</th><th>Stato osservato</th><th>Durata connessa</th><th>Prospettive</th><th>Metriche</th></tr></thead><tbody>${calls.map((c) => `<tr class="call-row" data-id="${c.id}" tabindex="0"><td><input ${c.id<0?'disabled':''} type="checkbox" class="call-check" aria-label="Seleziona chiamata ${c.id}" value="${c.id}" ${state.selected.has(c.id) ? "checked" : ""}></td><td><div class="identity" title="${esc(c.caller + " → " + c.callee)}">${c.id<0?'Tentativo utente':esc(shortIdentity(c.caller))} <span class="muted">→</span> ${esc(shortIdentity(c.callee))}</div><div class="call-date">${stamp(c.start)} <span class="muted">· ${recordReference(c)}</span></div></td>${mosCell(c,"downstream")}${mosCell(c,"upstream")}<td><span class="tag ${/failed|blocked/.test(c.status) ? "warn" : c.status.includes("partial") ? "neutral" : ""}">${esc(c.status==='blocked'?'Bloccato prima del SIP':c.status==='requested'?'Richiesta utente':c.status)}</span><small class="call-reason">${esc(c.reason||'')}${c.copies>1?' · '+c.copies+' copie dello stesso messaggio':''}</small></td><td class="mono nowrap">${duration(c)}</td><td>${c.perspectives} <span class="muted">sorgenti</span></td><td class="mono">${number(c.metrics)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function bindCalls() {
   $$(".call-row").forEach((row) => {
@@ -169,11 +189,11 @@ function renderCalls(page) {
       `<span class="tag">● Workspace privato</span>`,
     ) +
     stats() +
-    `<div class="panel"><div class="panel-head"><h2>Registro chiamate</h2><div class="toolbar"><select id="call-type" aria-label="Tipo di voce"><option value="all">Tutte le voci</option><option value="blocked">Tentativi bloccati</option><option value="attempt">Richieste utente</option><option value="sip">Sessioni SIP</option></select><input id="call-search" aria-label="Cerca chiamate" placeholder="Cerca interlocutore o Call-ID…"><button id="compare-selected">Confronta selezionate →</button></div></div><div class="call-sort toolbar"><label>Ordina per <select id="call-sort"><option value="start">Data</option><option value="duration">Durata connessa</option><option value="status">Stato osservato</option><option value="metrics">Numero metriche</option>${['downstream','upstream'].map(d=>['minimum','mean','maximum'].map((v,i)=>`<option value="mos.${d}.${v}">MOS ${d} · ${['minimo','medio','massimo'][i]}</option>`).join('')).join('')}</select></label><label>Ordine <select id="call-order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label><span class="muted">MOS: media pesata in evidenza · minimo e massimo · copertura temporale</span></div><div id="call-list"></div><div class="table-note">Orari originali dei log, senza fuso dichiarato. Seleziona più righe per confrontare chiamate o partecipanti. Richieste utente e sessioni SIP sono voci distinte: un tentativo accettato può avere entrambe. Non sono un conteggio di chiamate uniche. Richieste riconosciute dai messaggi espliciti App.log; azioni non registrate non sono ricostruibili. Massimo 2.000 sessioni e 2.000 richieste elencate; ordinamento su queste righe. MOS a profilo fisso, sola perdita RTCP: rosso &lt;3, arancio 3–4, verde ≥4 (soglie indicative). Prospettiva dell’ultimo import non duplicato, senza unire flussi; sorgente nel tooltip. Dati mancanti in fondo.</div></div>`;
+    `<div class="panel"><div class="panel-head"><h2>Registro chiamate</h2><div class="toolbar"><select id="call-type" aria-label="Tipo di voce"><option value="all">Tutte le voci</option><option value="blocked">Tentativi bloccati</option><option value="attempt">Richieste utente</option><option value="sip">Sessioni SIP</option></select><input id="call-search" aria-label="Cerca chiamate" placeholder="Cerca ID, interlocutore o Call-ID…"><button id="compare-selected">Confronta selezionate →</button></div></div><div class="call-sort toolbar"><label>Ordina per <select id="call-sort"><option value="start">Data</option><option value="duration">Durata connessa</option><option value="status">Stato osservato</option><option value="metrics">Numero metriche</option>${['downstream','upstream'].map(d=>['minimum','mean','maximum'].map((v,i)=>`<option value="mos.${d}.${v}">MOS ${d} · ${['minimo','medio','massimo'][i]}</option>`).join('')).join('')}</select></label><label>Ordine <select id="call-order"><option value="asc">Crescente</option><option value="desc">Decrescente</option></select></label><span class="muted">MOS: media pesata in evidenza · minimo e massimo · copertura temporale</span></div><div id="call-list"></div><div class="table-note">Orari originali dei log, senza fuso dichiarato. Seleziona più righe per confrontare chiamate o partecipanti. Richieste utente e sessioni SIP sono voci distinte: un tentativo accettato può avere entrambe. Non sono un conteggio di chiamate uniche. Richieste riconosciute dai messaggi espliciti App.log; azioni non registrate non sono ricostruibili. Massimo 2.000 sessioni e 2.000 richieste elencate; ordinamento su queste righe. MOS a profilo fisso, sola perdita RTCP: rosso &lt;3, arancio 3–4, verde ≥4 (soglie indicative). Prospettiva dell’ultimo import non duplicato, senza unire flussi; sorgente nel tooltip. Dati mancanti in fondo.</div></div>`;
   function list() {
     const text = $("#call-search").value.toLowerCase();
     const calls = state.calls.filter((c) =>
-      (c.caller + c.callee + c.sip_call_id + (c.reason||'')).toLowerCase().includes(text) && ({all:true,blocked:c.status==='blocked',attempt:c.id<0,sip:c.id>0}[$('#call-type').value]),
+      (c.caller + c.callee + c.sip_call_id + (c.reason||'') + ' ' + recordReference(c)).toLowerCase().includes(text) && ({all:true,blocked:c.status==='blocked',attempt:c.id<0,sip:c.id>0}[$('#call-type').value]),
     );
     const key = $("#call-sort").value, sign = $("#call-order").value === 'asc' ? 1 : -1;
     calls.sort((a,b) => {
@@ -279,9 +299,19 @@ const colors = [
 async function mountChart(root, ids, initialMetric = "rtcp.rtt") {
   if (root) await mountMultiChart(root, ids, initialMetric);
 }
+function logFamilyTone(key){
+  const known=['vdlog','kpelog','rtplog','sip_debug','vdklog','callinfo','phoneengine','app','info','telemetry','ios_hwwrapper','kpe-android','store','ctilib','notificationservice','mediastatslog','resip','regid','intentextension','shareextension','chatengine'];
+  const i=known.indexOf(key);
+  return i<0?'log-tone-custom':'log-tone-'+i;
+}
 async function mountEvents(root, base = {}, compact = false) {
   if (!root) return;
-  root.innerHTML = `<div class="panel"><div class="panel-head"><h2>${compact ? "Eventi della chiamata" : "Ricerca negli eventi"}</h2><div class="toolbar"><input class="event-search" placeholder="Cerca testo, errore, Call-ID…" aria-label="Cerca nei log"><select class="event-level" aria-label="Livello"><option value="">Tutti i livelli</option><option>ERROR</option><option>WARNING</option><option>INFO</option><option>DEBUG</option></select><button class="event-run">Cerca</button></div></div><div class="event-list"></div><div class="pager"><button class="event-prev small-button">← Precedenti</button><span class="event-range"></span><button class="event-next small-button">Successivi →</button></div></div>`;
+  root.innerHTML = `<div class="panel"><div class="panel-head"><h2>${compact === "attempt" ? "Eventi nel contesto del tentativo" : compact ? "Eventi della chiamata" : "Ricerca negli eventi"}</h2><div class="toolbar"><input class="event-search" placeholder="Cerca testo, errore, Call-ID…" aria-label="Cerca nei log"><select class="event-level" aria-label="Livello"><option value="">Tutti i livelli</option><option>ERROR</option><option>WARNING</option><option>INFO</option><option>DEBUG</option></select><button class="event-run">Cerca</button></div></div><div class="event-list"></div><div class="pager"><button class="event-prev small-button">← Precedenti</button><span class="event-range"></span><button class="event-next small-button">Successivi →</button></div></div>`;
+  const attemptExplorer=compact === 'attempt' && !!base.attempt;
+  const callExplorer=compact && (!!base.call || attemptExplorer);
+  const defaultScope=attemptExplorer?'evidence':'call';
+  const modes={},visible={},scopes={};let controlsReady=false;
+  if(callExplorer)$('.event-list',root).insertAdjacentHTML('beforebegin',`<div class="log-controls"><p>Spunta il log per mostrarlo. <strong>Tutto</strong> include ogni evento nell’intervallo; altrimenti ${attemptExplorer?'solo richiesta e prova del blocco':'solo questa chiamata'}. Il colore indica la provenienza.</p><div class="log-families"></div><details class="log-scope-details"><summary>Intervalli e criteri di selezione</summary><p class="log-window-note"></p></details></div>`);
   let offset = 0,
     ticket = 0;
   async function load() {
@@ -292,16 +322,35 @@ async function mountEvents(root, base = {}, compact = false) {
       level: $(".event-level", root).value,
       offset,
     });
-    const data = await api("events?" + params);
+    if(callExplorer)params.set('families',JSON.stringify(modes));
+    const data = await api((attemptExplorer?'attempt-events?':callExplorer?'call-events?':'events?') + params);
     if (t !== ticket || !root.isConnected) return;
+    if(callExplorer){
+      if(!controlsReady){
+        $('.log-families',root).innerHTML=data.families.map(f=>`<div class="log-family-control ${logFamilyTone(f.id)}" data-log-family="${esc(f.id)}"><label class="log-visible-label"><input type="checkbox" data-log-visible="${esc(f.id)}" checked> <span>${esc(f.label)}</span></label><label class="log-scope-label" title="Includi tutte le righe nell’intervallo, anche non attribuite a questa voce"><input type="checkbox" aria-label="Tutto l’intervallo: ${esc(f.label)}" data-log-scope="${esc(f.id)}"> Tutto</label></div>`).join('');
+        for(const f of data.families){visible[f.id]=true;scopes[f.id]=defaultScope;}
+        const update=async()=>{for(const f of data.families)modes[f.id]=visible[f.id]?scopes[f.id]:'hide';offset=0;await load();};
+        $$('[data-log-visible]',root).forEach(el=>el.onchange=safe(async()=>{visible[el.dataset.logVisible]=el.checked;await update();}));
+        $$('[data-log-scope]',root).forEach(el=>el.onchange=safe(async()=>{scopes[el.dataset.logScope]=el.checked?'interval':defaultScope;await update();}));
+        controlsReady=true;
+      }
+      if(attemptExplorer){
+        $('.log-window-note',root).textContent=`Contesto della stessa sorgente: ${data.windows[0].start} → ${data.windows[0].end} (60 s prima della richiesta, fino alla prova del blocco o alla richiesta stessa). Tutto disattivato: solo richiesta e prova del blocco, se presente. Tutto attivato: righe nel periodo, anche di altre attività, indicate come Contesto. Nessuna associazione automatica a sessioni SIP.`;
+      }else $('.log-window-note',root).innerHTML='Intervalli delle sorgenti (orari originali): '+data.windows.map(w=>`P${w.id}: ${esc(w.start||'non noto')} → ${esc(w.end||'non noto')}${w.window_evidence?` · fine delimitata dalla terminazione ${esc(w.window_evidence.filename)}:${w.window_evidence.line_no} (evento #${w.window_evidence.id}); la finestra archiviata è più ampia`:''}`).join('<br>')+'<br>“Tutte nell’intervallo” include contesto non attribuito e altre chiamate, solo nelle sorgenti di questa chiamata. Gli eventi senza orario non possono essere inclusi per intervallo.';
+    }
     $(".event-list", root).innerHTML = data.events.length
       ? data.events
           .map(
             (e) =>
-              `<details class="event"><summary><time>${stamp(e.ts)}</time><span class="tag ${/ERROR|WARN/.test(e.level) ? "warn" : "neutral"}">${esc(e.level || e.kind)}</span><span class="event-title">${esc(e.text.split("\n")[0])}</span></summary><div class="source">${esc(e.filename)}:${e.line_no} · evento #${e.id} · ${e.call_id ? "chiamata #" + e.call_id : "non attribuito"}</div><pre>${esc(e.text)}</pre></details>`,
+              `<details data-log-family="${esc(e.log_family||'')}" class="event ${e.log_family?'log-family-event '+logFamilyTone(e.log_family):''} ${e.network_switch?'event-switch':''}"><summary><time>${stamp(e.ts)}</time>${e.log_label?`<strong class="log-family-name">${esc(e.log_label)}</strong>`:''}${e.is_context?'<span class="tag neutral">Contesto</span>':''}<span class="tag ${e.network_switch?'switch-tag':/ERROR|WARN/.test(e.level) ? "warn" : "neutral"}">${e.network_switch?'⇄ Switch Network':esc(e.level || e.kind)}</span><span class="event-title">${esc(e.network_switch?.label||e.text.split("\n")[0])}</span></summary><div class="source">${e.source_label?esc(e.source_label)+' · ':''}${esc(e.filename)}:${e.line_no} · evento #${e.id} · ${e.call_id ? "chiamata #" + e.call_id : "non attribuito"}</div>${e.network_switch?switchDetails({...e.network_switch,ts:e.ts}):''}<pre>${esc(e.text)}</pre></details>`,
           )
           .join("")
       : empty("Nessun evento", "Prova una ricerca diversa.");
+    {
+      const displayedFamilies=data.families||[...new Set(data.events.map(e=>e.log_family).filter(Boolean))].sort().map(id=>({id}));
+      const custom=displayedFamilies.filter(f=>logFamilyTone(f.id)==='log-tone-custom').map(f=>f.id);
+      $$('[data-log-family]',root).forEach(el=>{const i=custom.indexOf(el.dataset.logFamily);if(i>=0)el.style.setProperty('--log-bg',`hsl(${180+(i*49.65)%130} 30% ${88+(i%3)*2}%)`);});
+    }
     $(".event-range", root).textContent =
       `${offset + (data.events.length ? 1 : 0)}–${offset + data.events.length}`;
     $(".event-prev", root).disabled = offset === 0;

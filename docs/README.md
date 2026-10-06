@@ -4,7 +4,8 @@ La piattaforma legge log, conserva le evidenze e calcola indicatori verificabili
 Il MOS mostrato è un **indice basato sulla perdita a profilo fisso**: non riassume
 da solo tutta la qualità della rete o dell'audio.
 
-Checkpoint corrente: [4 ottobre 2026](checkpoint-2026-10-04.md).
+Checkpoint corrente: [6 ottobre 2026 — Switch Network, log e tentativi](checkpoint-2026-10-06.md).
+Prossime attività e idee: [TODO](todo.md).
 
 ## Percorso consigliato
 
@@ -19,6 +20,8 @@ Checkpoint corrente: [4 ottobre 2026](checkpoint-2026-10-04.md).
 
 | Obiettivo | Guida |
 |---|---|
+| Filtrare i log della chiamata per famiglia e intervallo | [Log della chiamata](call-events.md) |
+| Individuare Switch Network espliciti in eventi, grafici e mappe | [Switch Network](network-switches.md) |
 | Interrogare i dati da un agent e salvare query generali | [Analisi libere e MCP](analytics.md) |
 | Capire identità, scarti e copie storiche | [Deduplicazione per sorgente](source-dedup.md) |
 | Confrontare due osservazioni e salvare l'analisi | [Diagnostica A/B](diagnostics.md) |
@@ -40,6 +43,7 @@ Checkpoint corrente: [4 ottobre 2026](checkpoint-2026-10-04.md).
 - [Telemetria app/GW, base v1](telemetry.md) e [revisione 1.1](telemetry-integration.md):
   contratto degli emitter, ID, orologi, finestre RTP e audit dei piani offline.
 - [Limiti e lavoro futuro](open-issues.md): confine tra funzioni implementate e proposte.
+- [Attività e idee](todo.md): lavoro concordato, proposte, priorità e criteri di completamento.
 - [Verifiche](validation.md): stato recente e cronologia dei collaudi.
 
 Lo schema SQLite corrente è **12**; il contratto di telemetria consigliato per i

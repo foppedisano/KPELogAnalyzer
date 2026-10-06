@@ -35,6 +35,9 @@ Riconnettere il client MCP per ricaricare gli strumenti.
 
 ## Pubblicazione e ripartenza
 
+Le prossime attività sono raccolte in [TODO](todo.md), separando lavoro
+concordato e idee da valutare. La lista iniziale non autorizza nuovi sviluppi.
+
 L'utente ha autorizzato commit e push di codice, test sintetici e documentazione.
 ZIP, database, backup e risultati locali restano esclusi dal repository.
 Individuare il commit con `git log -1 -- docs/checkpoint-2026-10-05.md`;

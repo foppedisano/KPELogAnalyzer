@@ -56,6 +56,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(self.request('GET','/api/connectivity?calls=-1')[0],400)
         code,data=self.request('GET','/api/events?import=1&start=2026-01-01%2012:00:03&end=2026-01-01%2012:00:04')
         self.assertEqual(code,200);self.assertEqual(len(data['events']),2)
+        self.assertTrue(all(e['log_family']=='app' and e['log_label']=='App' for e in data['events']))
 
     def test_structured_telemetry_api_and_mixed_mos_csv(self):
         from tests.test_telemetry_store import events

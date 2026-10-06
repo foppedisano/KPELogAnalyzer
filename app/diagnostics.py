@@ -92,7 +92,7 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
    ns=max(seconds(p['start']), lower-offset if lower is not None else seconds(p['start']))
    ne=min(seconds(network_end), upper-offset if upper is not None else seconds(network_end))
    if 0 < ne-ns <= 86400:
-    network.append(dict(timeline(db,p['import_id'],(datetime(1970,1,1)+timedelta(seconds=ns)).isoformat(' '),(datetime(1970,1,1)+timedelta(seconds=ne)).isoformat(' ')),side=side,perspective_id=pid,clock_offset=offset))
+    network.append(dict(timeline(db,p['import_id'],(datetime(1970,1,1)+timedelta(seconds=ns)).isoformat(' '),(datetime(1970,1,1)+timedelta(seconds=ne)).isoformat(' '),call_id=p['call_id'],perspective_id=pid),side=side,perspective_id=pid,clock_offset=offset))
 
 
   conditions=[]; args=[pid,*NAMES]

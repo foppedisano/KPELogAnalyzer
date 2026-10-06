@@ -89,3 +89,28 @@ La ricezione prova il percorso media, non la registrazione SIP né il login CTI.
 Il riepilogo del registro distingue chiamate ricostruite, tentativi utente elencati
 e totale delle voci. Il totale usa le stesse righe del badge laterale, prima dei
 filtri; non rappresenta chiamate uniche.
+
+
+## Switch Network espliciti
+
+Eventi, timeline, grafici e mappe evidenziano le richieste Switch Network con
+un marker viola e prove file:riga. Transizioni contestuali e posizioni stimate
+sono dichiarate separatamente. API `POST /api/analytics/network-switches` e MCP
+1.4.0 (13 strumenti), `analytics_network_switches`, usano lo stesso calcolo.
+Vedi [regole, campi e limiti](network-switches.md). Nessuna reimportazione richiesta.
+
+
+## Dettaglio dei tentativi utente
+
+I tentativi hanno un riferimento stabile «Tentativo #N», con N pari all’ID
+dell’evento di richiesta. Compare nel registro, nel breadcrumb e nel dettaglio;
+si può cercare N o il riferimento nel registro. Non è una nuova identità SIP
+é un numero di riga dipendente dall’ordinamento. Gli ID API restano invariati.
+Anche i log dei tentativi e di Esplora log mostrano famiglia e sfondo di provenienza.
+Il dettaglio usa gli stessi controlli compatti delle chiamate: visibilità per
+famiglia e checkbox **Tutto**. Per default mostra soltanto la richiesta e la
+prova esplicita del blocco, quando presente. Attivando **Tutto** per una famiglia
+include anche il contesto della stessa importazione da 60 s prima della richiesta fino alla prova del blocco inclusa
+(o alla richiesta stessa se manca una prova conclusiva),
+con badge **Contesto**. Non crea associazioni SIP. Nascondere una famiglia
+conserva la modalità scelta. La severità resta un badge separato.

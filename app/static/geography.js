@@ -112,7 +112,10 @@ async function renderGeography(page, renderId, callId=null) {
     $('.geo-controls',page).insertAdjacentHTML('beforeend','<label>Posizione registrata<select id="route-point" aria-label="Posizione del percorso"><option value="">Seleziona un punto…</option></select></label>');
     $('.geo-ranking',page).hidden=true;
   }
+  $('.geo-map-settings',page).insertAdjacentHTML('afterbegin','<label class="switch-key"><input id="geo-switches" type="checkbox" checked> ◆ Switch Network</label>');
+  $('.geo-side',page).insertAdjacentHTML('beforeend','<section class="panel"><h2 class="switch-key">⇄ Switch Network</h2><div id="geo-switch-list">Caricamento eventi espliciti…</div></section>');
   const canvas=$('#geo-canvas',page),ctx=canvas.getContext('2d');
+  let switches=[];
   let data=null, selected=null, dead=false, request=0, zoom=6, center=[.534,.37], width=900,height=620, hit=[], timer, frame, dragging=null, moved=false, appliedParams={};
   const tiles=new Map();let tileFailed=false;
   const valid=()=>!dead && renderId===renderToken && page.isConnected;
@@ -153,12 +156,19 @@ async function renderGeography(page, renderId, callId=null) {
       if($('#geo-locations',page).checked)for(const c of data.locations)if(!keys.has(c.id))drawCell(c,true);
       for(const c of visibleCells)drawCell(c,false);
       if(callMode&&$('#geo-routes',page).checked)drawRoute();
+      if($('#geo-switches',page).checked)for(const s of switches){if(!s.location)continue;const [x,y]=screen(project([s.location.longitude,s.location.latitude]));if(x<0||y<0||x>width||y>height)continue;
+        ctx.save();ctx.fillStyle=switchColor;ctx.strokeStyle='white';ctx.lineWidth=2;ctx.setLineDash(s.location.basis==='interpolated'?[2,2]:[]);ctx.beginPath();ctx.moveTo(x,y-10);ctx.lineTo(x+10,y);ctx.lineTo(x,y+10);ctx.lineTo(x-10,y);ctx.closePath();ctx.fill();ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='white';ctx.font='bold 13px system-ui';ctx.textAlign='center';ctx.fillText('⇄',x,y+4);ctx.restore();hit.push({switchEvent:s,x:x-12,y:y-12,w:24,h:24});}
     }
     const lat=Math.atan(Math.sinh(Math.PI*(1-2*center[1])))*180/Math.PI;
     const metresPerPixel=40075016.686*Math.cos(lat*Math.PI/180)/scale();
     const target=metresPerPixel*100,unit=10**Math.floor(Math.log10(target));const bar=Math.floor(target/unit)*unit;
     ctx.strokeStyle='#294954';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(20,height-44);ctx.lineTo(20+bar/metresPerPixel,height-44);ctx.stroke();
     $('#geo-scale',page).textContent=`${bar>=1000?number(bar/1000)+' km':number(bar)+' m'} · zoom ${number(zoom)}`;
+  }
+  function showSwitch(s){const g=s.location;const html=switchDetails(s)+`<p>${g?g.basis==='observed'?'Posizione locale registrata allo stesso istante.':'Posizione stimata fra due osservazioni entro '+g.gap_seconds+' s; non è un fix al momento dello switch.':esc(s.location_reason||'Posizione non disponibile')}</p>`+(g?g.evidence.map(e=>`<p>Posizione: ${esc(e.filename)}:${e.line} · evento #${e.event_id} · ${esc(e.ts)} · ${esc(e.kind)}</p>`).join(''):'');$('#geo-detail',page).innerHTML=html;$('#geo-popup-content',page).innerHTML=html;$('#geo-popup',page).hidden=false;redraw();}
+  function switchEntries(){
+    $('#geo-switch-list',page).innerHTML=`<p>${switches.length} richieste esplicite · ${switches.filter(s=>!s.location).length} senza posizione. Viola: evento, non qualità o stato della rete. Rombo tratteggiato: posizione stimata.</p>`+switches.map((s,i)=>`<button class="geo-switch-entry" data-switch="${i}">${esc(s.ts)}<br><strong>${esc(s.label)}</strong><br>${s.location?s.location.basis==='observed'?'Posizione registrata':'Posizione stimata':'Non localizzato'}</button>`).join('');
+    $$('.geo-switch-entry',page).forEach(b=>b.onclick=()=>{const s=switches[+b.dataset.switch];if(s.location){center=project([s.location.longitude,s.location.latitude]);zoom=Math.max(zoom,15);}showSwitch(s);});
   }
   function drawRoute(){
     const fresh=data.points.filter(p=>p.segment!==null);
@@ -245,7 +255,7 @@ async function renderGeography(page, renderId, callId=null) {
   canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect();setZoom(zoom+(e.deltaY<0?.5:-.5),[e.clientX-r.left,e.clientY-r.top]);};
   canvas.onpointerdown=e=>{canvas.setPointerCapture(e.pointerId);dragging=[e.clientX,e.clientY,...center];moved=false;};
   canvas.onpointermove=e=>{if(!dragging)return;const dx=e.clientX-dragging[0],dy=e.clientY-dragging[1];if(Math.abs(dx)+Math.abs(dy)>4)moved=true;center=[dragging[2]-dx/scale(),Math.max(0,Math.min(1,dragging[3]-dy/scale()))];redraw();};
-  canvas.onpointerup=e=>{dragging=null;if(moved)return;const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const h=[...hit].reverse().find(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h);if(h){if(h.point)showPoint(h.point);else show(h.c,h.grey);}};
+  canvas.onpointerup=e=>{dragging=null;if(moved)return;const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const h=[...hit].reverse().find(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h);if(h){if(h.switchEvent)showSwitch(h.switchEvent);else if(h.point)showPoint(h.point);else show(h.c,h.grey);}};
   canvas.onpointercancel=()=>{dragging=null;};canvas.ondblclick=e=>{const r=canvas.getBoundingClientRect();setZoom(zoom+1,[e.clientX-r.left,e.clientY-r.top]);};
   canvas.onkeydown=e=>{if(['+','=','-','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();if(e.key==='+'||e.key==='=')setZoom(zoom+1);else if(e.key==='-')setZoom(zoom-1);else{center[e.key==='ArrowLeft'||e.key==='ArrowRight'?0:1]+=(e.key==='ArrowLeft'||e.key==='ArrowUp'?-80:80)/scale();redraw();}}};
   $('#geo-popup-close',page).onclick=()=>{$('#geo-popup',page).hidden=true;};
@@ -274,6 +284,10 @@ async function renderGeography(page, renderId, callId=null) {
     if(callMode){query.set('call',callId);if($('#route-source',page).value)query.set('perspective',$('#route-source',page).value);}
     try{
       const next=await api((callMode?'call-route?':'geography?')+query);if(!valid()||token!==request)return;data=next;appliedParams=Object.fromEntries(query);selected=null;$('#geo-popup',page).hidden=true;
+      const switchQuery=Object.fromEntries([...query].filter(([k,v])=>['start','end','quality','platform','access','upstream','operator'].includes(k)&&v));
+      if(callMode){switchQuery.call_id=callId;if(data.perspective_id)switchQuery.perspective_id=data.perspective_id;switchQuery.quality='declared';}
+      try{const response=await api('analytics/network-switches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(switchQuery)});if(!valid()||token!==request)return;switches=response.events;switchEntries();}
+      catch(error){if(!valid()||token!==request)return;switches=[];$('#geo-switch-list',page).textContent='Switch Network non disponibili: '+error.message;}
       if(callMode){
         $('#route-source',page).innerHTML=data.sources.map(s=>`<option value="${s.id}">${esc(s.label)} · P${s.id}</option>`).join('');$('#route-source',page).value=data.perspective_id||'';
         $('#route-point',page).innerHTML='<option value="">Seleziona un punto…</option>'+data.points.map(p=>`<option value="${p.id}">${esc(p.ts)} · ${p.value===null?'senza valore':number(p.value)+' PQ'}${p.kind==='cached'?' · cache':''}</option>`).join('');
@@ -308,6 +322,7 @@ async function renderGeography(page, renderId, callId=null) {
   }
   $('#geo-apply',page).onclick=()=>load();
   $('#geo-routes',page).onchange=redraw;
+  $('#geo-switches',page).onchange=redraw;
   if(callMode){$('#route-source',page).onchange=()=>load(true);$('#route-point',page).onchange=()=>{const p=data?.points.find(p=>p.id===+$('#route-point',page).value);if(p){center=project([p.longitude,p.latitude]);showPoint(p);}};}
   for(const k of ['metric','cell','direction','quality','platform','access','upstream','operator'])$('#geo-'+k,page).onchange=()=>load();
   $('#geo-period',page).onchange=()=>{range();load();};
@@ -318,6 +333,6 @@ async function renderGeography(page, renderId, callId=null) {
   const previousCleanup=callMode?chartCleanup:null;
   chartCleanup=()=>{previousCleanup?.();dead=true;observer.disconnect();clearTimeout(timer);if(frame)cancelAnimationFrame(frame);for(const img of tiles.values()){img.onload=null;img.onerror=null;}};
   resize();
-  try{if(!geographyBase)geographyBase=await (await fetch('/basemap.json')).json();if(valid())redraw();}catch(e){if(valid())$('#geo-status',page).textContent='Base geografica offline non disponibile.';}
+  try{if(!geographyBase)geographyBase=await withLoading(async () => (await fetch('/basemap.json')).json());if(valid())redraw();}catch(e){if(valid())$('#geo-status',page).textContent='Base geografica offline non disponibile.';}
   if(valid())await load(true);
 }

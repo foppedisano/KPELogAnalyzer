@@ -135,3 +135,26 @@ consistente. Il DB e gli ZIP rimangono locali e non vanno pubblicati nel reposit
 ## Media plane e terminologia
 
 La [guida al media plane VDK](media-plane.md) distingue VID/VOD, le specializzazioni audio e le connessioni molti-a-molti. Ogni VD opera nel proprio thread: separare scheduling locale, statistiche di ricezione RTP e conseguenze sul media. Il catalogo delle metriche e la guida in linea espongono lo stesso ambito semantico.
+
+
+## Switch Network espliciti
+
+Eventi, timeline, grafici e mappe evidenziano le richieste Switch Network con
+un marker viola e prove file:riga. Transizioni contestuali e posizioni stimate
+sono dichiarate separatamente. API `POST /api/analytics/network-switches` e MCP
+1.4.0 (13 strumenti), `analytics_network_switches`, usano lo stesso calcolo.
+Vedi [regole, campi e limiti](network-switches.md). Nessuna reimportazione richiesta.
+
+
+## Log per famiglia nella chiamata
+
+Nome generico, colore per provenienza e controlli indipendenti di visibilità e
+ambito call/intervallo: [guida e API](call-events.md). Endpoint locale
+`GET /api/call-events`; default tutte le famiglie visibili, solo eventi attribuiti.
+
+
+Durante le richieste dei dati compare un indicatore condiviso «Caricamento dati…».
+Resta visibile fino al completamento di tutte le richieste concorrenti, anche
+quando cambi filtri. Scompare anche in caso di errore; il messaggio di errore
+resta separato. L’indicatore non blocca i comandi e rispetta la preferenza di
+riduzione del movimento. Gli upload conservano le loro barre di avanzamento.

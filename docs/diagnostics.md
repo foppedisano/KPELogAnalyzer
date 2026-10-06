@@ -166,3 +166,12 @@ Aggiornamento periodico schema 11: [migrazione, backup e recupero](periodic-metr
 ## Scheduling, RTP e device
 
 Consultare il [media plane VDK](media-plane.md) per la gerarchia. Ogni VD opera nel proprio thread: ritardi di scheduling e cicli descrivono la temporizzazione locale. Le statistiche NART specifiche dei pacchetti descrivono invece la ricezione RTP. Underrun e silenzio riprodotto sono conseguenze sulla disponibilità del media; da soli non distinguono una causa di rete da una locale. Conservare ciascuna relazione VID/VOD: un VOD può miscelare più input.
+
+
+## Switch Network espliciti
+
+Eventi, timeline, grafici e mappe evidenziano le richieste Switch Network con
+un marker viola e prove file:riga. Transizioni contestuali e posizioni stimate
+sono dichiarate separatamente. API `POST /api/analytics/network-switches` e MCP
+1.4.0 (13 strumenti), `analytics_network_switches`, usano lo stesso calcolo.
+Vedi [regole, campi e limiti](network-switches.md). Nessuna reimportazione richiesta.

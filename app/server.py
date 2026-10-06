@@ -7,6 +7,7 @@ import os
 import sqlite3
 import threading
 import time
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -104,6 +105,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send((STATIC/filename).read_bytes(),mime=mime+'; charset=utf-8')
             db = connect()
             if method == 'GET':
+                if path == '/api/attempt-events':
+                    from .call_events import query as call_events
+                    return self.send(call_events(db,None,json.loads(q('families')) if q('families') else None,
+                                                 q('search'),q('level'),int(q('offset','0')),attempt_id=int(q('attempt'))))
+                if path == '/api/call-events':
+                    from .call_events import query as call_events
+                    return self.send(call_events(db,int(q('call')),json.loads(q('families')) if q('families') else None,
+                                                 q('search'),q('level'),int(q('offset','0'))))
                 if path.startswith('/api/analytics/'):
                     from . import analytics
                     handlers={'catalog':analytics.catalog,'coverage':analytics.coverage,'recipes':analytics.recipes}
@@ -216,12 +225,21 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(dict(summary=summary,invalid_metrics=invalid,error_events=errors,signaling=signaling[:500],truncated=len(signaling)>500))
                 if path == '/api/events':
                     clauses,args = [],[]
+                    from .network_switches import collect, explicit, describe
+                    switch_context=[]
+                    if q('call'):
+                        switch_context=collect(db,call_id=int(q('call')),perspective_id=int(q('perspective')) if q('perspective') else None)
                     for key, operator in [('start','>='),('end','<=')]:
                         if q(key):
                             clauses.append('e.ts'+operator+'?'); args.append(q(key))
                     for key,column in [('call','e.call_id'),('file','e.file_id'),('import','e.import_id'),('perspective','e.perspective_id')]:
                         if q(key):
-                            clauses.append(column+'=?'); args.append(int(q(key)))
+                            if key in ('call','perspective') and switch_context:
+                                switch_ids=[ev['event_id'] for s in switch_context for ev in s['evidence']]
+                                clauses.append('('+column+'=? OR e.id IN ('+','.join('?' for _ in switch_ids)+'))')
+                                args.extend([int(q(key)),*switch_ids])
+                            else:
+                                clauses.append(column+'=?'); args.append(int(q(key)))
                     if q('search'):
                         clauses.append('e.text LIKE ?'); args.append('%'+q('search')+'%')
                     if q('level'):
@@ -231,6 +249,23 @@ class Handler(BaseHTTPRequestHandler):
                     where = ' WHERE '+' AND '.join(clauses) if clauses else ''
                     offset = max(0,int(q('offset','0')))
                     events = rows(db,'SELECT e.*,f.name filename FROM events e JOIN files f ON f.id=e.file_id'+where+' ORDER BY e.ts,e.id LIMIT 101 OFFSET ?', (*args,offset))
+                    if not q('call'):
+                        switch_pages={}
+                        for e in events[:100]:
+                            if explicit(e['text'],e['filename']) and e['ts']:
+                                switch_pages.setdefault(e['import_id'],[]).append(e['ts'])
+                        for iid,times in switch_pages.items():
+                            switch_context.extend(collect(db,import_id=iid,start=min(times),
+                                end=(datetime.fromisoformat(max(times))+timedelta(microseconds=1)).isoformat(' ',timespec='microseconds')))
+                    for e in events[:100]:
+                        from .call_events import family, label
+                        e['log_family']=family(e['filename'])
+                        e['log_label']=label(e['log_family'])
+                        decoded=explicit(e['text'],e['filename'])
+                        if decoded:
+                            matching=next((s for s in switch_context if any(v['event_id']==e['id'] for v in s['evidence'])),None)
+                            e['network_switch']=matching or dict(decoded,label=describe(decoded),ts=e['ts'],
+                                evidence=[dict(event_id=e['id'],filename=e['filename'],line=e['line_no'],ts=e['ts'])])
                     return self.send(dict(events=events[:100], more=len(events)>100, offset=offset))
                 if path == '/api/metric-names':
                     data=rows(db,'SELECT name,unit,statistic,COUNT(*) samples FROM metrics GROUP BY name,unit,statistic ORDER BY name,statistic')
@@ -311,6 +346,9 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/api/analytics/'):
                 from . import analytics
                 name=path.removeprefix('/api/analytics/')
+                if method=='POST' and name=='network-switches':
+                    from .network_switches import request
+                    return self.send(request(db,obj))
                 if method=='POST' and name in ('call-route','perceptual-quality','connectivity'):
                     from .analytics_current import run
                     return self.send(run(db,name,obj))

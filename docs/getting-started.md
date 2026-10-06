@@ -78,9 +78,9 @@ viene pubblicato su Git. Non cambiare il binding locale in `0.0.0.0`.
 ## Analizzare i propri log
 
 Per l'accesso conversazionale seguire la [configurazione MCP stdio](analytics.md).
-L'adattatore 1.3.0 usa il container già attivo, senza Python host o porte nuove:
+L'adattatore 1.4.0 usa il container già attivo, senza Python host o porte nuove:
 `docker compose exec -T analyzer python -m app.mcp_server`.
-Dopo il rebuild riconnettere il client e verificare `tools/list` (12 strumenti),
+Dopo il rebuild riconnettere il client e verificare `tools/list` (13 strumenti),
 `analytics_catalog.current_analysis` e `analytics_coverage`. PQ, percorsi e
 rete/servizi sono esposti insieme alle query; il client non viene configurato
 automaticamente. Non eseguire import demo sull'archivio personale.
@@ -206,3 +206,9 @@ proprietario: la disponibilità del sorgente non costituisce una licenza
 generale di uso, modifica o redistribuzione. Le istruzioni descrivono il setup
 tecnico; per autorizzazioni ulteriori contattare il proprietario.
 Non è un prodotto ufficiale Kalliope e non contiene il suo SDK proprietario.
+
+
+Il parser 1.12.1 e i [controlli log per famiglia](call-events.md) si installano
+con lo stesso rebuild Docker. Non richiedono dipendenze, migrazioni o import
+sintetici sul database personale. Dopo l’aggiornamento ricaricare la pagina
+per usare il nuovo endpoint e i controlli del dettaglio chiamata.

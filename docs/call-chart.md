@@ -49,3 +49,12 @@ Il grafico esclude per default le prospettive storiche riconosciute come copie
 della stessa sorgente/Call-ID. **Mostra copie storiche della stessa sorgente**
 le include anche nei CSV. Le serie di produttori e SSRC diversi restano separate.
 [Regole ed evidenze di identificazione](source-dedup.md).
+
+
+## Switch Network espliciti
+
+Eventi, timeline, grafici e mappe evidenziano le richieste Switch Network con
+un marker viola e prove file:riga. Transizioni contestuali e posizioni stimate
+sono dichiarate separatamente. API `POST /api/analytics/network-switches` e MCP
+1.4.0 (13 strumenti), `analytics_network_switches`, usano lo stesso calcolo.
+Vedi [regole, campi e limiti](network-switches.md). Nessuna reimportazione richiesta.

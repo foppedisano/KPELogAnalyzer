@@ -1,7 +1,7 @@
 """Point-position sampling of one-second AWT quality; no held coordinates."""
 from collections import defaultdict, Counter
 from datetime import datetime
-from .perceptual import perspective, bounded_perspective, tick, stamp, SECOND, METHOD
+from .perceptual import perspective, prepare, bounded_perspective, tick, stamp, SECOND, METHOD
 from .geography import grid, iso
 from .mobility import Context, filters, matches, summary
 from .call_route import interpolated_samples
@@ -59,8 +59,9 @@ def aggregate(db, params):
                 run=[]
         if len(run)>1: runs.append(run)
         previous_estimate=None
+        prepared=prepare(db,by_pid[pid])
         for run in runs:
-            result=interpolated_samples(db,by_pid[pid],run)
+            result=interpolated_samples(db,by_pid[pid],run,prepared=prepared)
             by_id={g['id']:g for g in run}
             allowed=set()
             for link in result['links']:
@@ -94,7 +95,7 @@ def aggregate(db, params):
                 if len(c['evidence'])<20:
                     c['evidence'].append(dict(ts=ts,value=s['value'],position=s['position_evidence'],audio=s['audio_evidence']))
         points=defaultdict(list)
-        for m in perspective(db,by_pid[pid],{tick(p['ts'])//SECOND*SECOND for p in pp}):
+        for m in perspective(db,by_pid[pid],{tick(p['ts'])//SECOND*SECOND for p in pp},prepared=prepared):
             points[m['window_ts']].append(m);calculated+=1
             if calculated>200000: raise ValueError('Oltre 200.000 campioni AWT: restringere il periodo')
         groups=defaultdict(list)

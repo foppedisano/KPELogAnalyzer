@@ -79,7 +79,7 @@ class TopologyTests(unittest.TestCase):
         backup.close()
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM events').fetchone()[0],before)
         self.assertEqual(self.db.execute('SELECT name FROM source_identities').fetchone()[0],'Preserved')
-        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'12')
+        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'13')
         init(self.db)
 
 

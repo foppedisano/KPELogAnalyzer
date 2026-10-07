@@ -55,6 +55,11 @@ di aggregati storici per archivi illimitati. I limiti delle query non cancellano
 gli input. Serviranno indici/aggregati, misure di carico e un protocollo operativo
 prima di esporre un servizio di previsione ad alta frequenza.
 
+Schema 13 aggiunge l’indice eventi per sorgente/orario. La preparazione AWT viene
+riutilizzata nella singola richiesta e le sovrapposizioni usano somme cumulative;
+non esiste una cache persistente dei risultati. Le mappe globali su archivi ampi
+possono ancora richiedere tempo: misure e limiti nel checkpoint corrente.
+
 ## UI-001 — Configurazioni dei grafici
 
 La selezione multimetriche del dettaglio/Confronta dura per la vista corrente.

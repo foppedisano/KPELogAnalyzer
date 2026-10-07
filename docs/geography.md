@@ -189,3 +189,7 @@ un marker viola e prove file:riga. Transizioni contestuali e posizioni stimate
 sono dichiarate separatamente. API `POST /api/analytics/network-switches` e MCP
 1.4.0 (13 strumenti), `analytics_network_switches`, usano lo stesso calcolo.
 Vedi [regole, campi e limiti](network-switches.md). Nessuna reimportazione richiesta.
+
+7 ottobre 2026: mappa e percorso disegnati prima della risposta Switch Network.
+Verifica browser con ritardo sintetico di 20 s, navigazione fra viste, import,
+confronto e cambio metrica positivi; console pulita. [Checkpoint prestazioni](checkpoint-2026-10-07-performance.md).

@@ -1,6 +1,6 @@
 # Attività e idee
 
-[Indice](README.md) · [Limiti tecnici](open-issues.md) · [Checkpoint corrente](checkpoint-2026-10-06.md)
+[Indice](README.md) · [Limiti tecnici](open-issues.md) · [Checkpoint corrente](checkpoint-2026-10-07-performance.md)
 
 Questo file raccoglie il lavoro da concordare con il proprietario. Una voce
 proposta non autorizza lo sviluppo: prima di iniziare, concordare obiettivo e
@@ -60,3 +60,8 @@ e annotazioni. Il limite di lettura introdotto per gli elenchi non è un backfil
 Proposte del 6 ottobre (da concordare): EXPORT-001, backup su disco e download
 in streaming per database grandi; IMPORT-001, avanzamento delle fasi di import
 e aggiornamento registro con misure delle prestazioni.
+
+- PERF-001, 6 ottobre 2026: ottimizzazioni richieste per chiamata, import e mappa:
+  indice schema 13, catalogo limitato alla selezione, riuso evidenze AWT e
+  integrale degli intervalli. Misure e limiti nel checkpoint; la mappa globale
+  rimane costosa su periodi ampi. Ulteriori cache/aggregati da concordare.

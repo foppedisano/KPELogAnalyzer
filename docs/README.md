@@ -4,7 +4,7 @@ La piattaforma legge log, conserva le evidenze e calcola indicatori verificabili
 Il MOS mostrato è un **indice basato sulla perdita a profilo fisso**: non riassume
 da solo tutta la qualità della rete o dell'audio.
 
-Checkpoint corrente: [6 ottobre 2026 — Switch Network, log e tentativi](checkpoint-2026-10-06.md).
+Checkpoint corrente: [7 ottobre 2026 — Prestazioni](checkpoint-2026-10-07-performance.md).
 Prossime attività e idee: [TODO](todo.md).
 
 ## Percorso consigliato

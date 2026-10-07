@@ -33,7 +33,7 @@ def bounded(db,p):
     # identities retain their explicit semantics and analyst annotations.
     c=db.execute('SELECT call_key FROM calls WHERE id=?',(p['call_id'],)).fetchone()
     if c and c[0].startswith('local:') and p['line_id'] is not None and p['start']:
-        e=db.execute('''SELECT e.id,e.ts,e.line_no,f.name filename FROM events e
+        e=db.execute('''SELECT e.id,e.ts,e.line_no,f.name filename FROM events e INDEXED BY event_call_ts
             JOIN files f ON f.id=e.file_id WHERE e.import_id=? AND e.line_id=? AND e.perspective_id=? AND e.call_id=?
             AND e.ts>=? AND (? IS NULL OR e.ts<=?) AND f.parser='kpe'
             AND (instr(e.text,'removed from list') OR instr(e.text,'Send socket event for call terminated'))
@@ -41,7 +41,7 @@ def bounded(db,p):
         if e and (not p['end'] or e['ts']<p['end']):
             p['end']=e['ts'];p['window_evidence']=dict(e)
     if not p['end']:
-        p['end']=db.execute('SELECT MAX(ts) FROM events WHERE import_id=? AND call_id=?',
+        p['end']=db.execute('SELECT MAX(ts) FROM events INDEXED BY event_call_ts WHERE import_id=? AND call_id=?',
                            (p['import_id'],p['call_id'])).fetchone()[0]
     return p
 
@@ -105,8 +105,10 @@ def query(db,cid,modes=None,search='',level='',offset=0,attempt_id=None):
         where='('+' OR '.join(selected)+')'
         if search:where+=' AND e.text LIKE ?';args.append('%'+search+'%')
         if level:where+=' AND e.level=?';args.append(level)
+        # A source-wide time scan can be far larger than an exact call selection.
+        index=' INDEXED BY event_call_ts' if attempt_id is None and not any(f['mode']=='interval' for f in families) else ''
         data=[dict(r) for r in db.execute('''SELECT e.*,f.name filename,i.label source_label
-            FROM events e JOIN files f ON f.id=e.file_id JOIN imports i ON i.id=e.import_id
+            FROM events e'''+index+''' JOIN files f ON f.id=e.file_id JOIN imports i ON i.id=e.import_id
             WHERE '''+where+' ORDER BY e.ts,e.id LIMIT 101 OFFSET ?',[*args,offset])]
     # Annotate only actual explicit switches; default selection stays strict call-only.
     from .network_switches import collect,explicit

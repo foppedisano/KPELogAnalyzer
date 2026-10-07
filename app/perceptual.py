@@ -1,6 +1,7 @@
 """AWT occupancy in wall-clock seconds, derived read-only from original evidence."""
 import math
 import re
+from bisect import bisect_right
 from collections import defaultdict
 from datetime import datetime, timedelta
 from .incidents import signal, reconstruct
@@ -33,6 +34,17 @@ def overlap(spans, a, b):
     return sum(max(0, min(y,b)-max(x,a)) for x,y in union(spans))
 
 
+def overlap_query(spans):
+    """Build an exact integral once; query arbitrary windows in logarithmic time."""
+    merged=union(spans)
+    starts=[a for a,b in merged];totals=[0]
+    for a,b in merged:totals.append(totals[-1]+b-a)
+    def integral(t):
+        i=bisect_right(starts,t)-1
+        return 0 if i<0 else totals[i]+min(t,merged[i][1])-merged[i][0]
+    return lambda a,b: max(0,integral(b)-integral(a))
+
+
 def windows(episodes, counters, start, end, seconds=None):
     """State occupancy: outside episodes is 100, assuming complete AWT logging."""
     spans=[]; evidence=[]
@@ -50,14 +62,14 @@ def windows(episodes, counters, start, end, seconds=None):
             a=round(e['start']*SECOND)
         a=max(a,start);b=min(b,end)
         if a<b: spans.append((a,b));evidence.append((a,b,e['evidence']))
-    spans=union(spans)
+    occupied=overlap_query(spans)
     if seconds is None and end-start > LIMIT*SECOND: raise ValueError('Oltre 100.000 secondi: restringere la chiamata')
     out=[]
     bins=range(start//SECOND*SECOND, end, SECOND) if seconds is None else sorted(set(seconds))
     for bucket in bins:
         a=max(bucket,start);b=min(bucket+SECOND,end)
         if b<=a: continue
-        ms=overlap(spans,a,b)/1000
+        ms=occupied(a,b)/1000
         percent=100*ms/((b-a)/1000)
         proofs={(p['event_id'],p.get('metric_id'),p['line']):p for p in baseline}
         for x,y,pp in evidence:
@@ -75,7 +87,7 @@ def bounded_perspective(db, p):
     p=dict(p)
     p.setdefault('end_basis','observed_termination')
     if not p['end']:
-        last=db.execute('SELECT max(ts) FROM events WHERE import_id=? AND call_id=?',
+        last=db.execute('SELECT max(ts) FROM events INDEXED BY event_call_ts WHERE import_id=? AND call_id=?',
                         (p['import_id'],p['call_id'])).fetchone()[0]
         if not last: return None
         p['end']=stamp(tick(last)+1)
@@ -83,12 +95,12 @@ def bounded_perspective(db, p):
     return p
 
 
-def perspective(db, p, seconds=None):
+def prepare(db, p):
     p=bounded_perspective(db,p)
-    if not p: return []
+    if not p: return None
     start=tick(p['connected'] or p['start']);end=tick(p['end'])
     counters=defaultdict(list)
-    raw=list(db.execute("""SELECT m.*,e.text,f.name filename FROM metrics m JOIN events e ON e.id=m.event_id
+    raw=list(db.execute("""SELECT m.*,substr(e.text,1,instr(e.text||char(10),char(10))-1) text,f.name filename FROM metrics m JOIN events e ON e.id=m.event_id
         JOIN files f ON f.id=e.file_id WHERE m.perspective_id=? AND m.name IN ('vd.silence_played','vd.buffer')
         AND m.unit='ms' AND m.statistic='sample'
         ORDER BY m.ts,m.id LIMIT 100001""",(p['id'],)))
@@ -106,6 +118,8 @@ def perspective(db, p, seconds=None):
         ORDER BY e.ts,e.id LIMIT 100001""",(p['import_id'],p['start'],p['end'],p['call_id'])))
     if len(events)>LIMIT or sum(map(len,counters.values()))>LIMIT: raise ValueError('Troppi eventi AWT')
     signals=[];unassigned=[];life={};creations=[]
+    peers=list(db.execute('SELECT start,end FROM perspectives WHERE import_id=? AND line_id=?',
+                          (p['import_id'],p['line_id'])))
     for row in events:
         row=dict(row);row['ts']=observed_timestamp(row['text'],row['ts'])[0]
         header=row['text'].split('\n',1)[0]
@@ -128,8 +142,8 @@ def perspective(db, p, seconds=None):
             unassigned.append(s)
             continue
         # An unassigned line is usable only in one unambiguous source-local window.
-        count=db.execute('SELECT count(*) FROM perspectives WHERE import_id=? AND line_id=? AND start<=? AND (end IS NULL OR end>=?)',
-                         (p['import_id'],p['line_id'],row['ts'],row['ts'])).fetchone()[0]
+        count=sum(1 for peer in peers if peer['start'] is not None and peer['start']<=row['ts']
+                  and (peer['end'] is None or peer['end']>=row['ts']))
         if count!=1:
             unassigned.append(s)
             continue
@@ -141,21 +155,28 @@ def perspective(db, p, seconds=None):
         output=e['observer'].removeprefix('AWT - ') if e['observer']!='AWT' else 'Default Audio Output'
         e['active_until']=min([t for d,t in creations if d in (output,e['device']) and t>round(e['detected_at']*SECOND)]+[end])
         episodes[(e['observer'],e['device'])].append(e)
-    result=[]
     keys=counters.keys()|episodes.keys()
     if not keys:
         keys={('AWT (assunto durante la chiamata)','')}
     call_proofs=[dict(event_id=r['id'],filename=r['filename'],line=r['line_no'],basis='call_lifecycle') for r in db.execute('''
-        SELECT e.id,e.line_no,f.name filename FROM events e JOIN files f ON f.id=e.file_id
+        SELECT e.id,e.line_no,f.name filename FROM events e INDEXED BY event_call_ts JOIN files f ON f.id=e.file_id
         WHERE e.import_id=? AND e.call_id=? ORDER BY e.ts,e.id LIMIT 1''',(p['import_id'],p['call_id']))]
     uncertain=[]
     for e in reconstruct(unassigned):
         a=start if e.get('start_basis')=='unknown' else round(e['start']*SECOND)
         b=round(e['end']*SECOND) if e['end'] is not None else end
         uncertain.append((a,max(a+1,b)))
+    return p,start,end,counters,episodes,keys,call_proofs,overlap_query(uncertain)
+
+
+def perspective(db, p, seconds=None, prepared=None):
+    prepared=prepared if prepared is not None else prepare(db,p)
+    if prepared is None:return []
+    p,start,end,counters,episodes,keys,call_proofs,uncertain=prepared
+    result=[]
     for key in keys:
         for w in windows(episodes[key],counters[key],start,end,seconds):
-            if overlap(uncertain,tick(w['ts']),tick(w['valid_until'])): continue
+            if uncertain(tick(w['ts']),tick(w['valid_until'])): continue
             if not w['evidence']: w['evidence']=call_proofs
             if not w['evidence']: continue
             proof=w['evidence'][0]

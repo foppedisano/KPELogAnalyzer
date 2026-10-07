@@ -215,11 +215,12 @@ for entry in CATALOG:
     describe_units(entry, units)
 
 
-def catalog(db):
+def catalog(db, call_ids=None):
     result = [dict(entry) for entry in CATALOG]
     known = {entry['name']: entry for entry in result}
     observed = {}
-    for row in db.execute('SELECT DISTINCT name,unit FROM metrics ORDER BY name,unit'):
+    where=' WHERE call_id IN ('+','.join('?' for _ in call_ids)+')' if call_ids is not None else ''
+    for row in db.execute('SELECT DISTINCT name,unit FROM metrics'+where+' ORDER BY name,unit',call_ids or []):
         observed.setdefault(row['name'], set()).add(row['unit'] or '')
     for name, units in observed.items():
         if name not in known:

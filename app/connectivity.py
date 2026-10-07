@@ -241,7 +241,7 @@ def for_calls(db, ids):
         AND id NOT IN (SELECT perspective_id FROM effective_duplicates) ORDER BY id''', ids):
         from .call_events import bounded
         p=bounded(db,p)
-        end = p['end'] or db.execute('SELECT MAX(ts) FROM events WHERE import_id=? AND call_id=?',(p['import_id'],p['call_id'])).fetchone()[0]
+        end = p['end'] or db.execute('SELECT MAX(ts) FROM events INDEXED BY event_call_ts WHERE import_id=? AND call_id=?',(p['import_id'],p['call_id'])).fetchone()[0]
         if not p['start'] or not end or end <= p['start']:
             continue
         if len(result)>=40:

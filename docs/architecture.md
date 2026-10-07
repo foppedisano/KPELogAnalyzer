@@ -54,7 +54,7 @@ Le derivazioni sono escluse quando mancano unità, identità o riferimenti affid
 
 ### Migrazioni
 
-Lo schema corrente è **12**. Le migrazioni successive preservano ID grezzi e
+Lo schema corrente è **13**. Le migrazioni successive preservano ID grezzi e
 annotazioni. Su DB popolati producono backup consistenti pre-vN; un backup
 omonimo non viene sovrascritto. Servono spazio per backup e arricchimenti.
 Le istruzioni sotto sulle singole versioni descrivono la storia dello schema;
@@ -69,6 +69,7 @@ non vanno interpretate come versioni alternative oggi supportate dal frontend.
 | 5→6 | Archivio geografico posizione–MOS |
 | 6→7 | Rete e sequenze di movimento |
 | 7→8 | Archivio canonico telemetria e intervalli verificati |
+| 12→13 | Indice eventi per sorgente/orario; nessuna riscrittura dei record |
 | 11→12 | Tentativi utente e osservazioni di connettività ([metodo e backup](connectivity.md)) |
 | 8→9 | Identità sorgente e deduplicazione delle chiamate tradizionali |
 
@@ -79,7 +80,7 @@ un DB aperto. [Procedura operativa](getting-started.md).
 
 ## Riferimento tecnico dettagliato
 
-## Modello base dei dati (schema 12)
+## Modello base dei dati (schema 13)
 
 | Table | Meaning | Relations |
 |---|---|---|

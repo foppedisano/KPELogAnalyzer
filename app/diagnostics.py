@@ -87,7 +87,7 @@ def diagnostics(db, a, b=None, device_a='NART0 of Line 0', device_b='NART0 of Li
 
   if not math.isfinite(offset) or abs(offset)>86400: raise ValueError('Offset massimo ±86400 secondi')
   from .connectivity import timeline
-  network_end = p['end'] or db.execute('SELECT MAX(ts) FROM events WHERE import_id=? AND call_id=?',(p['import_id'],p['call_id'])).fetchone()[0]
+  network_end = p['end'] or db.execute('SELECT MAX(ts) FROM events INDEXED BY event_call_ts WHERE import_id=? AND call_id=?',(p['import_id'],p['call_id'])).fetchone()[0]
   if p['start'] and network_end and network_end > p['start']:
    ns=max(seconds(p['start']), lower-offset if lower is not None else seconds(p['start']))
    ne=min(seconds(network_end), upper-offset if upper is not None else seconds(network_end))

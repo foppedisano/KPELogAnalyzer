@@ -277,7 +277,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path == '/api/metric-options':
                     ids=[int(x) for x in q('calls').split(',') if x]
                     if not ids or len(ids)>20: raise ValueError('Seleziona da 1 a 20 chiamate')
-                    return self.send(metric_options(db,ids,catalog(db)))
+                    return self.send(metric_options(db,ids,catalog(db,ids)))
                 if path == '/api/metrics':
                     from .source_dedup import filter_duplicates
                     ids = [int(x) for x in q('calls').split(',') if x]

@@ -212,3 +212,18 @@ Il parser 1.12.1 e i [controlli log per famiglia](call-events.md) si installano
 con lo stesso rebuild Docker. Non richiedono dipendenze, migrazioni o import
 sintetici sul database personale. Dopo l’aggiornamento ricaricare la pagina
 per usare il nuovo endpoint e i controlli del dettaglio chiamata.
+
+
+## Ottimizzazione schema 13
+
+Il rebuild Docker aggiunge `event_import_time` su sorgente e timestamp. Prima
+crea automaticamente `/data/kpe.sqlite3.pre-v13.bak` con il backup SQLite su
+**disco**, senza caricare il DB in RAM. Servono spazio per una copia completa e
+per il nuovo indice; il primo avvio può richiedere alcuni minuti. Attendere
+`/api/health` prima di riaprire il lavoro. Non interrompere importazioni attive.
+Un backup omonimo non viene sovrascritto: conservarlo e rinominarlo prima di un
+nuovo tentativo. I record, gli ID e le annotazioni rimangono invariati.
+Per rollback usare una nuova cartella/volume con la copia pre-v13 e il codice
+compatibile; non sovrascrivere il DB aperto. Non servono Python/Node sull'host.
+L'esportazione dal browser resta in memoria: per DB grandi preferire il backup
+su disco. La migrazione non richiede reimportazione dei log.

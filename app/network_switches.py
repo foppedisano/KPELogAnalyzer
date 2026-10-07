@@ -85,10 +85,18 @@ def collect(db, import_id=None, start=None, end=None, call_id=None, perspective_
     if import_id is not None:clauses.append('e.import_id=?');args.append(import_id)
     if call_id is not None:
         clauses.append('e.import_id IN (SELECT import_id FROM perspectives WHERE call_id=?)');args.append(call_id)
+    if call_id is not None:
+        from .call_events import windows as call_windows
+        selected=[p for p in call_windows(db,call_id) if p['start'] and p['end']
+                  and (perspective_id is None or p['id']==perspective_id)]
+        if not selected:return []
+        clauses.append('e.ts>=? AND e.ts<=?')
+        args.extend([iso(datetime.fromisoformat(min(p['start'] for p in selected))-timedelta(seconds=6)),
+                     iso(datetime.fromisoformat(max(p['end'] for p in selected))+timedelta(seconds=6))])
     # Include neighboring requests so narrowing a view cannot make context unique.
     if start:clauses.append('e.ts>=?');args.append(iso(datetime.fromisoformat(start)-timedelta(seconds=6)))
     if end:clauses.append('e.ts<?');args.append(iso(datetime.fromisoformat(end)+timedelta(seconds=6)))
-    clauses.extend(["lower(f.name) LIKE '%kpelog%'",'instr(e.text,?)>0']);args.append(MARKER)
+    clauses.extend(["e.file_id IN (SELECT id FROM files WHERE lower(name) LIKE '%kpelog%')",'instr(e.text,?)>0']);args.append(MARKER)
     candidates=db.execute('''SELECT e.id,e.import_id,e.call_id,e.perspective_id,e.line_id,e.ts,e.line_no,
         substr(e.text,1,instr(e.text||char(10),char(10))-1) text,f.name filename
         FROM events e JOIN files f ON f.id=e.file_id WHERE '''+' AND '.join(clauses)+
@@ -103,7 +111,7 @@ def collect(db, import_id=None, start=None, end=None, call_id=None, perspective_
         all_source_times[iid].add(e['ts'])
         if iid not in windows:
             windows[iid]=[dict(p) for p in db.execute('''SELECT p.*,i.label,
-                COALESCE(p.end,(SELECT MAX(ts) FROM events WHERE import_id=p.import_id AND call_id=p.call_id)) bounded_end
+                COALESCE(p.end,(SELECT MAX(ts) FROM events INDEXED BY event_call_ts WHERE import_id=p.import_id AND call_id=p.call_id)) bounded_end
                 FROM perspectives p JOIN imports i ON i.id=p.import_id WHERE p.import_id=?
                 AND p.id NOT IN (SELECT perspective_id FROM effective_duplicates)''',(iid,))]
             from .call_events import bounded

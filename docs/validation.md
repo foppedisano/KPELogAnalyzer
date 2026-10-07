@@ -295,3 +295,30 @@ aggiornate. Verificati fallback senza blocco, blocco successivo alla richiesta,
 esclusione degli eventi successivi e paginazione su fixture sintetiche.
 Servizio locale ricostruito e health positivo; verifica API sul tentativo #4840333.
 Nessuna modifica ai dati personali; commit/push restano sospesi.
+
+
+Misure locali finali (archivio circa 5 GB, tempi indicativi dipendenti da cache e
+carico; non SLA): lista eventi della chiamata di prova 4,16 → 0,024 s; opzioni
+metriche 53,87 → 0,015 s; timeline rete 0,082 s nella verifica HTTP finale.
+Il benchmark con profiler della mappa PQ completa superava il limite di 90 s;
+versione finale 57,8 s, risultato identico alle revisioni intermedie verificato
+tramite digest. Richiesta HTTP senza profiler: 40,0 s, circa 4.800 celle e
+97.500 campioni intermedi. La vista globale non è istantanea: restringere il
+periodo riduce il lavoro. Non sono stati ridotti copertura, campioni o limiti.
+Import sintetico: 2,91 → 2,24 s nella prima prova, 6,55 → 2,73 s sotto carico;
+nessuno ZIP personale reimportato per misurare le prestazioni.
+
+Le query di primo/ultimo evento e gli eventi strettamente attribuiti usano
+l'indice esatto per chiamata: il nuovo indice per sorgente non deve indurre
+scansioni dell'intero import. Test di regressione con 15.000 eventi estranei e
+limite sul lavoro SQLite. Il selettore metriche legge le unità della selezione,
+non di tutto l'archivio. Le intestazioni AWT sono lette senza trasferire i corpi
+multilinea inutilizzati, conservando prove e log originali.
+
+Migrazione locale completata, backup `/data/kpe.sqlite3.pre-v13.bak` conservato.
+Confronto con il backup: importazioni, chiamate, prospettive e annotazioni
+identiche. Servizio http://127.0.0.1:8080 attivo e health positivo.
+
+7 ottobre 2026: mappa e percorso disegnati prima della risposta Switch Network.
+Verifica browser con ritardo sintetico di 20 s, navigazione fra viste, import,
+confronto e cambio metrica positivi; console pulita. [Checkpoint prestazioni](checkpoint-2026-10-07-performance.md).

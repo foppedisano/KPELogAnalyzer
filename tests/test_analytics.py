@@ -125,7 +125,7 @@ class AnalyticsTests(unittest.TestCase):
             db.execute("UPDATE meta SET value='9' WHERE key='schema_version'")
         init(db);init(db)
         self.assertEqual(db.execute('SELECT COUNT(*) FROM calls').fetchone()[0],1)
-        self.assertEqual(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'12')
+        self.assertEqual(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'13')
         backup=sqlite3.connect(filename+'.pre-v10.bak')
         self.assertEqual(backup.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0],'9')
         backup.close();db.close()

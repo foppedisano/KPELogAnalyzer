@@ -2,7 +2,7 @@
 
 [Indice](README.md) · [Modello dei dati](architecture.md)
 
-Riferimento del servizio attuale, schema 12. Le sezioni con numeri di schema
+Riferimento del servizio attuale, schema 13. Le sezioni con numeri di schema
 indicano l’introduzione della funzione, non endpoint separati per versione.
 Il servizio è per analisi locale: non espone ancora previsioni o piani operativi.
 
@@ -278,3 +278,15 @@ l’elenco chiamata. La sola annotazione non cambia filtri, attribuzioni o pagin
 modalità per famiglia `evidence` (default), `interval`, `hide`. Contesto limitato
 alla stessa importazione, da 60 secondi prima della richiesta alla prova del blocco
 inclusa, oppure alla richiesta se manca la prova. [Contratto e limiti](call-events.md).
+
+
+Ottimizzazione del 6 ottobre: le evidenze AWT vengono preparate una sola volta
+per prospettiva nella richiesta geografica; gli intervalli uniti usano somme
+cumulative per calcolare le sovrapposizioni. Nessuna cache tra richieste, nessuna
+modifica di formule, prove, limiti o precedenza fra celle dirette e stimate.
+L'indice schema 13 accelera i filtri per sorgente e tempo anche durante l'import.
+
+`GET /api/metric-options?calls=...` conserva tutte le metriche note del catalogo;
+le metriche non documentate e le unità aggiuntive sono cercate soltanto nelle
+chiamate selezionate. Il catalogo generale `/api/catalog` rimane globale.
+Questo evita una scansione dell'intero archivio aprendo una singola chiamata.

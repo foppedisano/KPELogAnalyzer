@@ -64,7 +64,7 @@ def connect(db_path=None):
 def init(db):
     db.executescript(SCHEMA)
     version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-    if version not in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'):
+    if version not in ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'):
         raise RuntimeError('Unsupported database schema; back up the database before upgrading')
     if version == '1':
         filename = db.execute('PRAGMA database_list').fetchone()[2]
@@ -270,6 +270,22 @@ def init(db):
         except Exception:
             db.rollback()
             raise
+    version = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
+    if version == '12':
+        filename = db.execute('PRAGMA database_list').fetchone()[2]
+        if filename and db.execute('SELECT 1 FROM imports LIMIT 1').fetchone():
+            backup = Path(filename).with_name(Path(filename).name + '.pre-v13.bak')
+            if backup.exists():
+                raise RuntimeError('Backup already exists: preserve or rename before upgrading')
+            target = sqlite3.connect(backup)
+            try:
+                db.backup(target)
+            finally:
+                target.close()
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('CREATE INDEX IF NOT EXISTS event_import_time ON events(import_id,ts)')
+            db.execute("UPDATE meta SET value='13' WHERE key='schema_version'")
     from .enrichment import enrich_pending
     enrich_pending(db)
     from .geography import pending

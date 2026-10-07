@@ -114,8 +114,8 @@ class RouteTests(unittest.TestCase):
         from unittest.mock import patch
         self.prepare()
         from app.call_route import interpolated_samples
-        def ambiguous(*args):
-            result=interpolated_samples(*args)
+        def ambiguous(*args, **kwargs):
+            result=interpolated_samples(*args, **kwargs)
             for s in result['points']: s['value']=None
             return result
         with patch('app.perceptual_geo.interpolated_samples',side_effect=ambiguous):

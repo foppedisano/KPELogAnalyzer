@@ -1,10 +1,10 @@
 """Source-local call routes, with evidence and point-sampled AWT quality."""
 from collections import defaultdict
 from .geography import grid
-from .perceptual import bounded_perspective, perspective, tick, stamp, SECOND, METHOD
+from .perceptual import bounded_perspective, perspective, prepare, tick, stamp, SECOND, METHOD
 
 
-def interpolated_samples(db, selected, positions):
+def interpolated_samples(db, selected, positions, prepared=None):
     """One midpoint per complete clock second bracketed by unambiguous positions.
 
     Geometry is estimated at constant speed; quality is calculated from AWT,
@@ -25,7 +25,7 @@ def interpolated_samples(db, selected, positions):
             if len(pending)>100000: raise ValueError('Oltre 100.000 punti interpolati: restringere la chiamata')
     values=defaultdict(list)
     if seconds:
-        for m in perspective(db,selected,seconds): values[m['window_ts']].append(m)
+        for m in perspective(db,selected,seconds,prepared=prepared): values[m['window_ts']].append(m)
     samples=[]
     for bucket,left,right,a,b in pending:
         t=bucket+SECOND//2;fraction=(t-a)/(b-a)
@@ -82,11 +82,12 @@ def route(db, call_id, perspective_id=None, cell=50):
         AND start<=? AND (end>=? OR end IS NULL)''',(p['import_id'],p['end'],p['start']))]
     positions=[g for g in positions if g['call_id']==call_id or
         [q['id'] for q in peers if q and q['start']<=g['ts']<q['end']]==[p['id']]]
+    prepared=prepare(db,selected)
     data['interpolation']=interpolated_samples(db,selected,[g for g in positions
-        if (p['connected'] or p['start'])<=g['ts']<=p['end']])
+        if (p['connected'] or p['start'])<=g['ts']<=p['end']],prepared=prepared)
     seconds={tick(g['ts'])//SECOND*SECOND for g in positions if g['kind']!='cached'}
     values=defaultdict(list)
-    for m in perspective(db,selected,seconds): values[m['window_ts']].append(m)
+    for m in perspective(db,selected,seconds,prepared=prepared): values[m['window_ts']].append(m)
     cell_bins=defaultdict(set)
     for g in positions:
         if g['kind']!='cached': cell_bins[stamp(tick(g['ts'])//SECOND*SECOND)].add(grid(g['latitude'],g['longitude'],cell)[0])

@@ -286,8 +286,11 @@ async function renderGeography(page, renderId, callId=null) {
       const next=await api((callMode?'call-route?':'geography?')+query);if(!valid()||token!==request)return;data=next;appliedParams=Object.fromEntries(query);selected=null;$('#geo-popup',page).hidden=true;
       const switchQuery=Object.fromEntries([...query].filter(([k,v])=>['start','end','quality','platform','access','upstream','operator'].includes(k)&&v));
       if(callMode){switchQuery.call_id=callId;if(data.perspective_id)switchQuery.perspective_id=data.perspective_id;switchQuery.quality='declared';}
-      try{const response=await api('analytics/network-switches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(switchQuery)});if(!valid()||token!==request)return;switches=response.events;switchEntries();}
-      catch(error){if(!valid()||token!==request)return;switches=[];$('#geo-switch-list',page).textContent='Switch Network non disponibili: '+error.message;}
+      switches=[];$('#geo-switch-list',page).textContent='Caricamento Switch Network…';
+      // Quality cells are already available; the optional overlay must not delay painting.
+      void api('analytics/network-switches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(switchQuery)})
+        .then(response=>{if(!valid()||token!==request)return;switches=response.events;switchEntries();redraw();})
+        .catch(error=>{if(!valid()||token!==request)return;switches=[];$('#geo-switch-list',page).textContent='Switch Network non disponibili: '+error.message;});
       if(callMode){
         $('#route-source',page).innerHTML=data.sources.map(s=>`<option value="${s.id}">${esc(s.label)} · P${s.id}</option>`).join('');$('#route-source',page).value=data.perspective_id||'';
         $('#route-point',page).innerHTML='<option value="">Seleziona un punto…</option>'+data.points.map(p=>`<option value="${p.id}">${esc(p.ts)} · ${p.value===null?'senza valore':number(p.value)+' PQ'}${p.kind==='cached'?' · cache':''}</option>`).join('');

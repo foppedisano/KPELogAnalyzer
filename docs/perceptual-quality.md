@@ -188,3 +188,10 @@ per il colore. I campioni intermedi non sono più inviati come `routes`:
 `route_samples` ne indica il conteggio prima dell'aggregazione e delle esclusioni
 AWT. Limiti: 100.000 campioni intermedi e 10.000 celle. Nessun cambio schema.
 Il percorso della singola chiamata conserva invece linee, puntini e API precedenti.
+
+
+Ottimizzazione del 6 ottobre: le evidenze AWT vengono preparate una sola volta
+per prospettiva nella richiesta geografica; gli intervalli uniti usano somme
+cumulative per calcolare le sovrapposizioni. Nessuna cache tra richieste, nessuna
+modifica di formule, prove, limiti o precedenza fra celle dirette e stimate.
+L'indice schema 13 accelera i filtri per sorgente e tempo anche durante l'import.
